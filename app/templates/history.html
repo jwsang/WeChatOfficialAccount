@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block page_title %}历史统计{% endblock %}
+{% block page_id %}history{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>历史统计</h1>
+    <p>聚合抓取、素材、发布与日志数据，提供运营回顾和问题追踪视图。</p>
+</header>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>统计概览</h2>
+            <p class="muted">点击刷新获取最新历史数据。</p>
+        </div>
+        <button id="history-refresh-button" type="button" class="secondary">刷新统计</button>
+    </div>
+    <div id="history-message"></div>
+</section>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div id="history-article-summary" class="empty">正在加载文章统计...</div>
+    </section>
+    <section class="card">
+        <div id="history-material-summary" class="empty">正在加载素材统计...</div>
+    </section>
+</section>
+
+<section class="card">
+    <div id="history-crawl-list" class="empty">正在加载抓取历史...</div>
+</section>
+
+<section class="card">
+    <div id="history-log-list" class="empty">正在加载日志中心...</div>
+</section>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div id="history-site-stats" class="empty">正在加载站点素材统计...</div>
+    </section>
+    <section class="card">
+        <div id="history-publish-records" class="empty">正在加载发布记录...</div>
+    </section>
+</section>
+
+<section class="card">
+    <div id="history-tag-stats" class="empty">正在加载标签统计...</div>
+</section>
+{% endblock %}

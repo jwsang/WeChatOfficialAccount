@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} - {% block page_title %}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body data-page="{% block page_id %}{% endblock %}" class="{% if page == 'login' %}is-login-page{% endif %}">
+    <div class="app-shell{% if page == 'login' %} auth-shell{% endif %}">
+        {% if page != "login" %}
+            {% include "_sidebar.html" %}
+        {% endif %}
+
+        <main class="page-main{% if page == 'login' %} login-main{% endif %}">
+            <div class="container{% if page == 'login' %} auth-container{% endif %}">
+                {% block page_body %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

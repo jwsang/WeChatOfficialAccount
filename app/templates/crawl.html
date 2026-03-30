@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block page_title %}抓取任务{% endblock %}
+{% block page_id %}crawl{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>抓取任务</h1>
+    <p>按关键词创建抓取任务，查看执行详情、站点日志和入库素材。</p>
+</header>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div class="section-header">
+            <div>
+                <h2>抓取任务创建</h2>
+                <p class="muted">支持全部站点/指定站点、每站抓取上限、页数上限与结果入库。</p>
+            </div>
+        </div>
+        <div id="crawl-form-message"></div>
+        <form id="crawl-form" class="form-grid">
+            <div class="field"><label for="crawl-keyword">关键词</label><input id="crawl-keyword" required /></div>
+            <div class="field">
+                <label for="crawl-scope">抓取范围</label>
+                <select id="crawl-scope">
+                    <option value="all">全部启用站点</option>
+                    <option value="selected">指定站点</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>指定站点</label>
+                <div id="crawl-site-selector" class="checkbox-list"></div>
+            </div>
+            <div class="field"><label for="per-site-limit">每站抓取上限</label><input id="per-site-limit" type="number" min="1" max="10" value="3" /></div>
+            <div class="field"><label for="max-pages">抓取页数上限</label><input id="max-pages" type="number" min="1" max="10" value="2" /></div>
+            <div class="field"><label for="created-by">执行人</label><input id="created-by" value="admin" /></div>
+            <div class="actions">
+                <button type="submit">创建并执行任务</button>
+                <button type="button" class="ghost" id="crawl-reset-button">重置任务表单</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header inline-between">
+            <div>
+                <h2>抓取任务列表</h2>
+                <p class="muted">展示任务状态、结果统计与重试入口。</p>
+            </div>
+            <button class="secondary" id="crawl-refresh-button" type="button">刷新任务</button>
+        </div>
+        <div id="crawl-list-message"></div>
+        <div id="crawl-task-list" class="list-stack"></div>
+    </section>
+</section>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>任务详情</h2>
+            <p class="muted">查看站点抓取日志、入库素材与缩略图。</p>
+        </div>
+        <button class="ghost" id="retry-task-button" type="button" disabled>重试当前任务</button>
+    </div>
+    <div id="crawl-task-detail" class="empty">请选择一条抓取任务查看详情。</div>
+</section>
+{% endblock %}

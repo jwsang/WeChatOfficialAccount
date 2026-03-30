@@ -43,7 +43,7 @@ FILES: dict[str, str] = {
 
 
         class Settings(BaseSettings):
-            app_name: str = "微信公众号文章素材管理系统"
+            app_name: str = "文章素材管理"
             app_env: str = "development"
             debug: bool = True
             database_url: str = Field(

@@ -212,15 +212,65 @@ class CrawlService:
 
     def _build_image_assets(self, site: SiteConfig, keyword: str, visual_seed: int) -> tuple[bytes, bytes, int, int, str]:
         width, height = 1280, 720
-        image = Image.new("RGB", (width, height), color=self._build_color(site.code, keyword, visual_seed))
+        base_color = self._build_color(site.code, keyword, visual_seed)
+        accent_a = self._build_color(f"{site.code}:a", keyword, visual_seed + 5)
+        accent_b = self._build_color(site.code, f"{keyword}:b", visual_seed + 11)
+
+        image = Image.new("RGB", (width, height), color=base_color)
         draw = ImageDraw.Draw(image)
-        draw.rounded_rectangle((40, 40, width - 40, height - 40), radius=28, outline=(255, 255, 255), width=4)
-        draw.multiline_text(
-            (80, 90),
-            f"微信公众号素材\n{site.name}\n关键词：{keyword}\n序号：{visual_seed}",
-            fill=(255, 255, 255),
-            spacing=16,
+
+        stripe_height = max(24, height // 18)
+        stripe_count = max(1, (height + stripe_height - 1) // stripe_height)
+        for index, y in enumerate(range(0, height, stripe_height)):
+            ratio = index / max(1, stripe_count - 1)
+            stripe_color = self._mix_color(accent_a, accent_b, ratio)
+            draw.rectangle((0, y, width, min(height, y + stripe_height)), fill=stripe_color)
+
+        panel_margin = 48
+        panel_color = self._mix_color(base_color, (255, 255, 255), 0.20)
+        text_color = self._contrast_color(panel_color)
+        draw.rounded_rectangle(
+            (panel_margin, panel_margin, width - panel_margin, height - panel_margin),
+            radius=30,
+            outline=text_color,
+            width=4,
         )
+
+        seed_bytes = hashlib.sha256(f"{site.code}-{keyword}-{visual_seed}".encode("utf-8")).digest()
+        available_width = width - panel_margin * 2 - 120
+        available_height = height - panel_margin * 2 - 180
+        for index in range(14):
+            x_seed = seed_bytes[index]
+            y_seed = seed_bytes[(index + 9) % len(seed_bytes)]
+            w_seed = seed_bytes[(index + 15) % len(seed_bytes)]
+            h_seed = seed_bytes[(index + 21) % len(seed_bytes)]
+
+            x1 = panel_margin + 36 + int((x_seed / 255) * max(1, available_width))
+            y1 = panel_margin + 120 + int((y_seed / 255) * max(1, available_height))
+            shape_w = 56 + int((w_seed / 255) * 140)
+            shape_h = 36 + int((h_seed / 255) * 96)
+            x2 = min(width - panel_margin - 12, x1 + shape_w)
+            y2 = min(height - panel_margin - 12, y1 + shape_h)
+
+            fill_ratio = ((index * 19) % 100) / 100
+            shape_color = self._mix_color(accent_a, accent_b, fill_ratio)
+            draw.rounded_rectangle(
+                (x1, y1, x2, y2),
+                radius=10,
+                fill=shape_color,
+                outline=self._contrast_color(shape_color),
+                width=2,
+            )
+
+        draw.text((panel_margin + 24, panel_margin + 20), "WECHAT MATERIAL PREVIEW", fill=text_color)
+        draw.text((panel_margin + 24, panel_margin + 54), f"SITE: {site.code.upper()}  ITEM: {visual_seed}", fill=text_color)
+        draw.text((panel_margin + 24, panel_margin + 86), f"KEYWORD: {(keyword or 'N/A')[:48]}", fill=text_color)
+
+        baseline_y = height - panel_margin - 96
+        for index in range(40):
+            x = panel_margin + 28 + index * 22
+            bar_height = 16 + (seed_bytes[index % len(seed_bytes)] % 72)
+            draw.line((x, baseline_y, x, baseline_y + bar_height), fill=text_color, width=3)
 
         full_buffer = BytesIO()
         image.save(full_buffer, format="PNG")
@@ -238,6 +288,14 @@ class CrawlService:
     def _build_color(self, site_code: str, keyword: str, visual_seed: int) -> tuple[int, int, int]:
         seed = hashlib.md5(f"{site_code}-{keyword}-{visual_seed}".encode("utf-8")).hexdigest()
         return (int(seed[0:2], 16), int(seed[2:4], 16), int(seed[4:6], 16))
+
+    def _mix_color(self, left: tuple[int, int, int], right: tuple[int, int, int], ratio: float) -> tuple[int, int, int]:
+        safe_ratio = max(0.0, min(1.0, float(ratio)))
+        return tuple(int(left[i] * (1 - safe_ratio) + right[i] * safe_ratio) for i in range(3))
+
+    def _contrast_color(self, color: tuple[int, int, int]) -> tuple[int, int, int]:
+        luminance = color[0] * 0.299 + color[1] * 0.587 + color[2] * 0.114
+        return (28, 28, 28) if luminance > 170 else (245, 245, 245)
 
     def _save_assets(
         self,

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block page_title %}草稿箱{% endblock %}
+{% block page_id %}drafts{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>草稿箱</h1>
+    <p>管理已保存草稿，支持预览、复制、删除、同步微信草稿与模拟发布。</p>
+</header>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>微信公众号配置状态</h2>
+            <p class="muted">用于校验草稿同步与模拟发布能力。</p>
+        </div>
+        <button id="wechat-config-refresh-button" type="button" class="secondary">刷新配置</button>
+    </div>
+    <div id="wechat-config-message"></div>
+    <div id="wechat-config-status" class="empty block-top">正在检查微信公众号配置...</div>
+</section>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>草稿列表</h2>
+            <p class="muted">支持进入文章页编辑、预览、复制、删除及发布流程。</p>
+        </div>
+        <button id="draft-refresh-button" type="button" class="secondary">刷新草稿</button>
+    </div>
+    <div id="draft-list-message"></div>
+    <div id="draft-list" class="draft-list empty">正在加载草稿箱...</div>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>草稿预览</h2>
+        <p class="muted">点击草稿列表中的“预览草稿”后在此查看。</p>
+    </div>
+    <div id="article-preview-meta" class="empty">尚未选择草稿进行预览。</div>
+    <div id="article-preview-html" class="article-html-preview empty block-top">尚未生成 HTML 内容。</div>
+</section>
+{% endblock %}

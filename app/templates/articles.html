@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block page_title %}文章生成{% endblock %}
+{% block page_id %}articles{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>文章生成</h1>
+    <p>在独立页面完成素材选择、组稿排版、预览生成和草稿保存。</p>
+</header>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div class="section-header inline-between">
+            <div>
+                <h2>素材选择区</h2>
+                <p class="muted">从素材库选择图片进入组稿区。</p>
+            </div>
+            <button type="button" class="secondary" id="material-refresh-button">刷新素材</button>
+        </div>
+        <div class="block-top">
+            <h3>标签统计</h3>
+            <div id="material-tag-summary" class="tag-summary empty">正在加载标签统计...</div>
+        </div>
+        <div id="material-list-message" class="block-top"></div>
+        <div class="section-header inline-between block-top">
+            <h3>素材列表</h3>
+            <span id="material-count" class="status info">共 0 条</span>
+        </div>
+        <div id="material-list" class="material-list"></div>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h2>组稿编辑器</h2>
+            <p class="muted">设置标题、摘要、封面与素材顺序，生成预览后可保存草稿。</p>
+        </div>
+        <div id="article-builder-message"></div>
+        <div id="draft-editor-state" class="empty">当前为新建草稿模式，可直接保存为新草稿。</div>
+        <form id="article-form" class="form-grid block-top">
+            <div class="field"><label for="article-title">文章标题</label><input id="article-title" required /></div>
+            <div class="field"><label for="article-summary">文章摘要</label><textarea id="article-summary" placeholder="用于摘要与发布信息"></textarea></div>
+            <div class="field"><label for="article-author-name">作者名</label><input id="article-author-name" placeholder="可选" /></div>
+            <div class="field"><label for="article-source-url">原文链接</label><input id="article-source-url" placeholder="可选" /></div>
+            <div class="field">
+                <label for="article-template-code">模板</label>
+                <select id="article-template-code">
+                    <option value="image_gallery">图文画廊</option>
+                    <option value="digest_story">摘要故事</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="article-auto-sort">排序策略</label>
+                <select id="article-auto-sort">
+                    <option value="manual">手动排序</option>
+                    <option value="auto">自动排序</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="article-draft-status">草稿状态</label>
+                <select id="article-draft-status">
+                    <option value="editing">编辑中</option>
+                    <option value="pending_publish">待发布</option>
+                </select>
+            </div>
+            <div class="actions">
+                <button id="article-preview-button" type="submit">生成预览</button>
+                <button id="article-save-button" type="button" class="secondary">保存草稿</button>
+                <button id="article-reset-button" type="button" class="ghost">清空编辑器</button>
+            </div>
+        </form>
+
+        <div class="section-header inline-between block-top">
+            <h3>组稿素材</h3>
+            <span id="article-selected-count" class="status info">已选 0 张</span>
+        </div>
+        <div class="actions block-top">
+            <button type="button" class="ghost" id="article-sync-selection-button">从勾选同步到组稿区</button>
+            <button type="button" class="ghost" id="article-clear-selection-button">清空组稿区</button>
+        </div>
+        <div id="article-selected-materials" class="selected-material-list empty block-top">请先从素材库选择至少一张可用素材。</div>
+    </section>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>素材详情</h2>
+        <p class="muted">用于确认来源、标签和素材状态。</p>
+    </div>
+    <div id="material-detail" class="empty">请选择素材查看详情。</div>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>文章预览</h2>
+        <p class="muted">展示结构化预览信息与 HTML 内容。</p>
+    </div>
+    <div id="article-preview-meta" class="empty">尚未生成文章预览。</div>
+    <div id="article-preview-html" class="article-html-preview empty block-top">尚未生成 HTML 内容。</div>
+</section>
+{% endblock %}

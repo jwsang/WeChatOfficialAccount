@@ -1,0 +1,42 @@
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Test & tooling cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+-=-0-=-=-0=-=
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime logs
+*.log
+
+# Local environment variables
+.env
+.env.*
+
+# Project runtime/generated data (do not commit)
+data/
+
+# SQLite and other local DB files
+*.db
+*.sqlite
+*.sqlite3

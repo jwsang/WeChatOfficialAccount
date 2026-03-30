@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block page_title %}登录{% endblock %}
+{% block page_id %}login{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>账号登录</h1>
+    <p>请输入管理员账号后进入系统。默认账号：admin / 123456。</p>
+</header>
+
+<section class="card auth-card">
+    <div class="section-header">
+        <h2>登录信息</h2>
+        <p class="muted">登录成功后可在账号设置中修改资料和重置密码。</p>
+    </div>
+    <div id="login-message"></div>
+    <form id="login-form" class="form-grid block-top">
+        <div class="field">
+            <label for="login-username">用户名</label>
+            <input id="login-username" autocomplete="username" required />
+        </div>
+        <div class="field">
+            <label for="login-password">密码</label>
+            <input id="login-password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="actions">
+            <button type="submit">登录</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

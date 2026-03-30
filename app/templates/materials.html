@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block page_title %}素材库{% endblock %}
+{% block page_id %}materials{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>素材库</h1>
+    <p>支持素材筛选、标签统计、手动上传与素材详情管理。</p>
+</header>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div class="section-header">
+            <h2>筛选条件</h2>
+            <p class="muted">组合关键词、来源、状态和标签进行筛选。</p>
+        </div>
+        <div id="material-filter-message"></div>
+        <form id="material-filter-form" class="form-grid">
+            <div class="field"><label for="material-query-text">综合检索</label><input id="material-query-text" placeholder="名称 / 关键词 / 备注" /></div>
+            <div class="field"><label for="material-keyword">抓取关键词</label><input id="material-keyword" /></div>
+            <div class="field"><label for="material-source-site-code">来源站点标识</label><input id="material-source-site-code" placeholder="如 pixabay" /></div>
+            <div class="field">
+                <label for="material-source-type">来源类型</label>
+                <select id="material-source-type">
+                    <option value="">全部</option>
+                    <option value="crawl">抓取</option>
+                    <option value="manual">手动上传</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="material-status">素材状态</label>
+                <select id="material-status">
+                    <option value="">全部</option>
+                    <option value="available">可用</option>
+                    <option value="not_recommended">不推荐</option>
+                    <option value="deleted">已删除</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="material-audit-status">审核状态</label>
+                <select id="material-audit-status">
+                    <option value="">全部</option>
+                    <option value="pending">待审核</option>
+                    <option value="approved">已通过</option>
+                </select>
+            </div>
+            <div class="field"><label for="material-tag">标签</label><input id="material-tag" placeholder="如 favorite" /></div>
+            <div class="actions">
+                <button type="submit">应用筛选</button>
+                <button type="button" class="ghost" id="material-filter-reset-button">重置筛选</button>
+                <button type="button" class="secondary" id="material-refresh-button">刷新素材</button>
+            </div>
+        </form>
+        <div class="block-top">
+            <h3>标签统计</h3>
+            <div id="material-tag-summary" class="tag-summary empty">正在加载标签统计...</div>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-header">
+            <h2>素材上传</h2>
+            <p class="muted">手动补充本地图片，自动入库并生成缩略图。</p>
+        </div>
+        <div id="material-upload-message"></div>
+        <form id="material-upload-form" class="form-grid">
+            <div class="field"><label for="material-upload-title">素材标题（可选）</label><input id="material-upload-title" placeholder="为空时自动使用文件名" /></div>
+            <div class="field"><label for="material-upload-keywords">关键词</label><input id="material-upload-keywords" placeholder="用 | 分隔，例如 春天|花海" /></div>
+            <div class="field"><label for="material-upload-tags">标签</label><input id="material-upload-tags" placeholder="用 | 分隔，例如 favorite|manual" /></div>
+            <div class="field"><label for="material-upload-remark">备注 / Prompt</label><textarea id="material-upload-remark" placeholder="可选"></textarea></div>
+            <div class="field"><label for="material-upload-files">图片文件</label><input id="material-upload-files" type="file" accept="image/*" multiple /></div>
+            <div class="actions">
+                <button type="submit">上传素材</button>
+                <button type="button" class="ghost" id="material-upload-reset-button">重置上传表单</button>
+            </div>
+        </form>
+    </section>
+</section>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>素材列表</h2>
+            <p class="muted">点击“查看详情”查看完整元数据与操作入口。</p>
+        </div>
+        <div class="actions">
+            <button type="button" class="danger" id="material-bulk-delete-button">批量删除</button>
+            <button type="button" class="ghost" id="material-selection-clear-button">清空选择</button>
+            <span id="material-count" class="status info">共 0 条</span>
+        </div>
+    </div>
+    <div id="material-list-message"></div>
+    <div id="material-list" class="material-list"></div>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>素材详情</h2>
+        <p class="muted">展示原图、来源信息、标签与审核运营操作。</p>
+    </div>
+    <div id="material-detail" class="empty">请选择一条素材查看详情。</div>
+</section>
+{% endblock %}

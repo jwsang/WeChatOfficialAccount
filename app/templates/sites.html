@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block page_title %}站点管理{% endblock %}
+{% block page_id %}sites{% endblock %}
+
+{% block page_body %}
+<header class="hero">
+    <h1>站点管理</h1>
+    <p>维护来源站点与抓取规则，支持结构化规则配置与测试抓取。</p>
+</header>
+
+<section class="grid two-columns">
+    <section class="card">
+        <div class="section-header">
+            <div>
+                <h2>站点配置表单</h2>
+                <p class="muted">维护站点名称、标识、域名、规则与抓取状态。</p>
+            </div>
+        </div>
+        <div id="form-message"></div>
+        <form id="site-form" class="form-grid">
+            <input type="hidden" id="site-id" />
+            <div class="field"><label for="name">站点名称</label><input id="name" required /></div>
+            <div class="field"><label for="code">站点标识</label><input id="code" required /></div>
+            <div class="field"><label for="domain">站点域名</label><input id="domain" required /></div>
+            <div class="field">
+                <label for="crawl_method">抓取方式说明</label>
+                <select id="crawl_method">
+                    <option value="API接口">API接口</option>
+                    <option value="HTML解析">HTML解析</option>
+                    <option value="RSS/Feed">RSS/Feed</option>
+                </select>
+            </div>
+            <div class="field"><label for="search_rule">搜索 URL / 接口模板</label><textarea id="search_rule"></textarea></div>
+            <div class="field"><label for="parse_rule">图片提取规则</label><textarea id="parse_rule"></textarea></div>
+            <div class="field"><label for="page_rule">分页规则</label><textarea id="page_rule"></textarea></div>
+            <div class="field"><label for="remark">备注</label><textarea id="remark"></textarea></div>
+            <div class="field">
+                <label for="enabled">抓取状态</label>
+                <select id="enabled">
+                    <option value="true">启用</option>
+                    <option value="false">停用</option>
+                </select>
+            </div>
+            <section class="rule-config-panel">
+                <div>
+                    <h3>结构化规则配置</h3>
+                    <p class="muted">用于后台配置站点抓取规则，保存后会自动同步生成旧版规则说明字段。</p>
+                </div>
+                <div class="rule-config-grid">
+                    <div class="field"><label for="rule-search-url-template">搜索模板</label><input id="rule-search-url-template" placeholder="例如 /api/search?q={keyword}&page={page}" /></div>
+                    <div class="field"><label for="rule-request-method">请求方法</label><select id="rule-request-method"><option value="GET">GET</option><option value="POST">POST</option></select></div>
+                    <div class="field"><label for="rule-result-container-path">结果容器路径</label><input id="rule-result-container-path" placeholder="例如 results.items" /></div>
+                    <div class="field"><label for="rule-image-url-path">图片字段路径</label><input id="rule-image-url-path" placeholder="例如 image.url" /></div>
+                    <div class="field"><label for="rule-source-page-url-path">来源页字段路径</label><input id="rule-source-page-url-path" placeholder="例如 detail.url" /></div>
+                    <div class="field"><label for="rule-title-path">标题字段路径</label><input id="rule-title-path" placeholder="例如 title" /></div>
+                    <div class="field"><label for="rule-pagination-param">页码参数名</label><input id="rule-pagination-param" value="page" /></div>
+                    <div class="field"><label for="rule-pagination-start">起始页</label><input id="rule-pagination-start" type="number" min="1" value="1" /></div>
+                    <div class="field"><label for="rule-pagination-size-param">每页参数名</label><input id="rule-pagination-size-param" value="limit" /></div>
+                    <div class="field"><label for="rule-request-headers">请求头 JSON</label><textarea id="rule-request-headers" class="json-textarea" placeholder='{"User-Agent":"Mozilla/5.0"}'></textarea></div>
+                    <div class="field"><label for="rule-request-query-template">固定查询参数 JSON</label><textarea id="rule-request-query-template" class="json-textarea" placeholder='{"lang":"zh"}'></textarea></div>
+                    <div class="field"><label for="rule-extra-notes">规则备注</label><textarea id="rule-extra-notes"></textarea></div>
+                </div>
+            </section>
+            <div class="actions">
+                <button type="submit" id="submit-button">保存站点</button>
+                <button type="button" class="ghost" id="reset-button">清空表单</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header inline-between">
+            <div>
+                <h2>站点列表</h2>
+                <p class="muted">支持新增、编辑、启停、删除与测试抓取。</p>
+            </div>
+            <button class="secondary" id="refresh-button" type="button">刷新列表</button>
+        </div>
+        <div id="list-message"></div>
+        <div id="site-list" class="list-stack"></div>
+    </section>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <div>
+            <h2>测试抓取</h2>
+            <p class="muted">基于选中的站点返回样例结果，便于校验规则。</p>
+        </div>
+    </div>
+    <div class="toolbar">
+        <input id="test-keyword" placeholder="例如 春日花海" class="compact-input" />
+        <button id="test-button" type="button">执行测试抓取</button>
+    </div>
+    <div id="test-result" class="block-top"></div>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+<aside class="app-sidebar">
+    <div class="sidebar-brand">
+        <span class="brand-dot">微</span>
+        <a href="/">{{ app_name }}</a>
+    </div>
+    <section class="sidebar-section">
+        <a class="sidebar-link {% if page == 'index' %}active{% endif %}" href="/">首页</a>
+        <a class="sidebar-link {% if page == 'sites' %}active{% endif %}" href="/sites">站点管理</a>
+        <a class="sidebar-link {% if page == 'crawl' %}active{% endif %}" href="/crawl">抓取任务</a>
+        <a class="sidebar-link {% if page == 'materials' %}active{% endif %}" href="/materials">素材库</a>
+        <a class="sidebar-link {% if page == 'articles' %}active{% endif %}" href="/articles">文章生成</a>
+        <a class="sidebar-link {% if page == 'drafts' %}active{% endif %}" href="/drafts">草稿箱</a>
+        <a class="sidebar-link {% if page == 'history' %}active{% endif %}" href="/history">历史统计</a>
+        <a class="sidebar-link {% if page == 'account' %}active{% endif %}" href="/account">账号设置</a>
+    </section>
+    <section class="sidebar-section sidebar-user-panel" id="sidebar-user-panel">
+        <div class="muted" id="sidebar-user-name">未登录</div>
+        <a class="sidebar-link" id="sidebar-login-link" href="/login">去登录</a>
+        <button type="button" class="ghost" id="sidebar-logout-button" style="display: none;">退出登录</button>
+    </section>
+</aside>

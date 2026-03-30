@@ -58,13 +58,14 @@ _yaml_config = load_yaml_config()
 
 
 class Settings(BaseSettings):
-    app_name: str = "微信公众号文章素材管理系统"
+    app_name: str = "素材管理"
     app_env: str = "development"
     debug: bool = True
     database_url: str = Field(default=f"sqlite:///{(DATA_DIR / 'app.db').as_posix()}")
     wechat_app_id: str = _yaml_config.get("wechat", {}).get("AppID", "")
     wechat_app_secret: str = _yaml_config.get("wechat", {}).get("AppSecret", "")
     api_key: str = _yaml_config.get("API-Key", "") or _yaml_config.get("API-Key ", "")
+    session_secret: str = Field(default="wechat-official-account-dev-secret")
 
     model_config = SettingsConfigDict(
         env_file=".env",

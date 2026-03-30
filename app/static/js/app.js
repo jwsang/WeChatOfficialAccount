@@ -14,6 +14,7 @@ const state = {
     articleEditingDraftId: null,
     wechatConfigStatus: null,
     historyOverview: null,
+    currentUser: null,
 };
 
 const elements = {
@@ -86,6 +87,8 @@ const elements = {
     materialListMessage: document.getElementById('material-list-message'),
     materialList: document.getElementById('material-list'),
     materialCount: document.getElementById('material-count'),
+    materialBulkDeleteButton: document.getElementById('material-bulk-delete-button'),
+    materialSelectionClearButton: document.getElementById('material-selection-clear-button'),
     materialDetail: document.getElementById('material-detail'),
     articleBuilderMessage: document.getElementById('article-builder-message'),
     articleSyncSelectionButton: document.getElementById('article-sync-selection-button'),
@@ -121,6 +124,23 @@ const elements = {
     historySiteStats: document.getElementById('history-site-stats'),
     historyPublishRecords: document.getElementById('history-publish-records'),
     historyTagStats: document.getElementById('history-tag-stats'),
+    sidebarUserName: document.getElementById('sidebar-user-name'),
+    sidebarLoginLink: document.getElementById('sidebar-login-link'),
+    sidebarLogoutButton: document.getElementById('sidebar-logout-button'),
+    loginForm: document.getElementById('login-form'),
+    loginUsername: document.getElementById('login-username'),
+    loginPassword: document.getElementById('login-password'),
+    loginMessage: document.getElementById('login-message'),
+    accountBasicInfo: document.getElementById('account-basic-info'),
+    accountProfileForm: document.getElementById('account-profile-form'),
+    accountUsername: document.getElementById('account-username'),
+    accountDisplayName: document.getElementById('account-display-name'),
+    accountProfileMessage: document.getElementById('account-profile-message'),
+    accountPasswordForm: document.getElementById('account-password-form'),
+    accountOldPassword: document.getElementById('account-old-password'),
+    accountNewPassword: document.getElementById('account-new-password'),
+    accountConfirmPassword: document.getElementById('account-confirm-password'),
+    accountPasswordMessage: document.getElementById('account-password-message'),
 };
 
 function formatDate(value) {
@@ -175,12 +195,175 @@ function request(url, options = {}) {
     return fetch(url, {
         ...options,
         headers,
+        credentials: 'same-origin',
     }).then(async (response) => {
         if (response.status === 204) return null;
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || '请求失败');
         return data;
     });
+}
+
+function applySidebarUser(user) {
+    if (user) {
+        if (elements.sidebarUserName) {
+            elements.sidebarUserName.textContent = `${user.display_name}（${user.username}）`;
+        }
+        if (elements.sidebarLoginLink) {
+            elements.sidebarLoginLink.textContent = '账号设置';
+            elements.sidebarLoginLink.href = '/account';
+        }
+        if (elements.sidebarLogoutButton) {
+            elements.sidebarLogoutButton.style.display = 'inline-flex';
+        }
+        return;
+    }
+
+    if (elements.sidebarUserName) {
+        elements.sidebarUserName.textContent = '未登录';
+    }
+    if (elements.sidebarLoginLink) {
+        elements.sidebarLoginLink.textContent = '去登录';
+        elements.sidebarLoginLink.href = '/login';
+    }
+    if (elements.sidebarLogoutButton) {
+        elements.sidebarLogoutButton.style.display = 'none';
+    }
+}
+
+async function loadCurrentUser({ redirectOnUnauthorized = false } = {}) {
+    try {
+        const user = await request('/api/auth/me');
+        state.currentUser = user;
+        applySidebarUser(user);
+        return user;
+    } catch (error) {
+        state.currentUser = null;
+        applySidebarUser(null);
+        if (redirectOnUnauthorized) {
+            window.location.href = '/login';
+        }
+        return null;
+    }
+}
+
+async function submitLogin(event) {
+    event.preventDefault();
+    if (!elements.loginUsername || !elements.loginPassword) return;
+
+    const username = elements.loginUsername.value.trim();
+    const password = elements.loginPassword.value;
+    if (!username || !password) {
+        showMessage(elements.loginMessage, '请输入用户名和密码。', 'error');
+        return;
+    }
+
+    try {
+        showMessage(elements.loginMessage, '正在登录...', 'info');
+        const user = await request('/api/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password }),
+        });
+        state.currentUser = user;
+        applySidebarUser(user);
+        showMessage(elements.loginMessage, '登录成功，正在跳转...', 'success');
+        window.setTimeout(() => {
+            window.location.href = '/';
+        }, 300);
+    } catch (error) {
+        showMessage(elements.loginMessage, error.message, 'error');
+    }
+}
+
+async function logoutCurrentUser() {
+    try {
+        await request('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+        // ignore logout error
+    }
+    state.currentUser = null;
+    applySidebarUser(null);
+    window.location.href = '/login';
+}
+
+function renderAccountBasicInfo(user) {
+    if (!elements.accountBasicInfo) return;
+    elements.accountBasicInfo.innerHTML = `
+        <div class="meta-grid">
+            <div><span class="muted">用户 ID</span><strong>${user.id}</strong></div>
+            <div><span class="muted">角色</span><strong>${escapeHtml(user.role)}</strong></div>
+            <div><span class="muted">最后登录</span><strong>${formatDate(user.last_login_at)}</strong></div>
+            <div><span class="muted">创建时间</span><strong>${formatDate(user.created_at)}</strong></div>
+        </div>
+    `;
+}
+
+async function loadAccountProfile() {
+    const user = state.currentUser || await loadCurrentUser({ redirectOnUnauthorized: true });
+    if (!user) return;
+    if (elements.accountUsername) elements.accountUsername.value = user.username;
+    if (elements.accountDisplayName) elements.accountDisplayName.value = user.display_name;
+    renderAccountBasicInfo(user);
+}
+
+async function submitAccountProfile(event) {
+    event.preventDefault();
+    if (!elements.accountUsername || !elements.accountDisplayName) return;
+
+    const payload = {
+        username: elements.accountUsername.value.trim(),
+        display_name: elements.accountDisplayName.value.trim(),
+    };
+
+    try {
+        showMessage(elements.accountProfileMessage, '正在保存账号信息...', 'info');
+        const updated = await request('/api/auth/profile', {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        state.currentUser = updated;
+        applySidebarUser(updated);
+        renderAccountBasicInfo(updated);
+        showMessage(elements.accountProfileMessage, '账号信息更新成功。', 'success');
+    } catch (error) {
+        showMessage(elements.accountProfileMessage, error.message, 'error');
+    }
+}
+
+async function submitPasswordReset(event) {
+    event.preventDefault();
+    if (!elements.accountOldPassword || !elements.accountNewPassword || !elements.accountConfirmPassword) return;
+
+    const oldPassword = elements.accountOldPassword.value;
+    const newPassword = elements.accountNewPassword.value;
+    const confirmPassword = elements.accountConfirmPassword.value;
+    if (!oldPassword || !newPassword) {
+        showMessage(elements.accountPasswordMessage, '请完整填写密码信息。', 'error');
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        showMessage(elements.accountPasswordMessage, '两次输入的新密码不一致。', 'error');
+        return;
+    }
+
+    try {
+        showMessage(elements.accountPasswordMessage, '正在重置密码...', 'info');
+        const updated = await request('/api/auth/password/reset', {
+            method: 'POST',
+            body: JSON.stringify({
+                old_password: oldPassword,
+                new_password: newPassword,
+            }),
+        });
+        state.currentUser = updated;
+        applySidebarUser(updated);
+        if (elements.accountPasswordForm) {
+            elements.accountPasswordForm.reset();
+        }
+        showMessage(elements.accountPasswordMessage, '密码重置成功。', 'success');
+    } catch (error) {
+        showMessage(elements.accountPasswordMessage, error.message, 'error');
+    }
 }
 
 function safeParseJson(text, fallback = {}) {
@@ -243,28 +426,32 @@ function renderRuleConfigSummary(ruleConfig = {}) {
 }
 
 function resetSiteForm() {
+    if (!elements.form) return;
     elements.form.reset();
-    elements.siteId.value = '';
-    elements.enabled.value = 'true';
+    if (elements.siteId) elements.siteId.value = '';
+    if (elements.enabled) elements.enabled.value = 'true';
     applyRuleConfigToForm();
-    elements.code.disabled = false;
-    elements.submitButton.textContent = '保存站点';
+    if (elements.code) elements.code.disabled = false;
+    if (elements.submitButton) elements.submitButton.textContent = '保存站点';
     state.selectedSiteId = null;
     showMessage(elements.formMessage, '已切换为新增站点模式。', 'info');
     renderSiteList();
 }
 
 function resetMaterialUploadForm() {
+    if (!elements.materialUploadForm) return;
     elements.materialUploadForm.reset();
     showMessage(elements.materialUploadMessage, '上传表单已重置。', 'info');
 }
 
 function resetMaterialFilters() {
+    if (!elements.materialFilterForm) return;
     elements.materialFilterForm.reset();
     showMessage(elements.materialFilterMessage, '已清空素材筛选条件。', 'info');
 }
 
 function renderSiteSelector() {
+    if (!elements.crawlSiteSelector) return;
     if (!state.sites.length) {
         elements.crawlSiteSelector.innerHTML = '<div class="empty">暂无可选站点，请先创建并启用站点。</div>';
         return;
@@ -281,6 +468,7 @@ function renderSiteSelector() {
 }
 
 function renderSiteList() {
+    if (!elements.siteList) return;
     if (!state.sites.length) {
         elements.siteList.innerHTML = '<div class="empty">暂无站点数据。</div>';
         return;
@@ -314,6 +502,7 @@ function renderSiteList() {
 }
 
 function renderTaskList() {
+    if (!elements.crawlTaskList) return;
     if (!state.tasks.length) {
         elements.crawlTaskList.innerHTML = '<div class="empty">暂无抓取任务。</div>';
         return;
@@ -343,9 +532,12 @@ function renderTaskList() {
 }
 
 function renderTaskDetail(task) {
+    if (!elements.crawlTaskDetail) return;
     state.selectedTaskId = task.id;
-    elements.retryTaskButton.disabled = false;
-    elements.retryTaskButton.dataset.taskId = task.id;
+    if (elements.retryTaskButton) {
+        elements.retryTaskButton.disabled = false;
+        elements.retryTaskButton.dataset.taskId = task.id;
+    }
     const logs = task.logs.length
         ? `<div class="log-list">${task.logs.map((log) => `
             <article class="log-item">
@@ -405,13 +597,13 @@ function renderTaskDetail(task) {
 
 function materialFilters() {
     return {
-        query_text: elements.materialQueryText.value.trim(),
-        keyword: elements.materialKeyword.value.trim(),
-        source_site_code: elements.materialSourceSiteCode.value.trim(),
-        source_type: elements.materialSourceType.value,
-        material_status: elements.materialStatus.value,
-        audit_status: elements.materialAuditStatus.value,
-        tag: elements.materialTag.value.trim(),
+        query_text: elements.materialQueryText?.value?.trim() || '',
+        keyword: elements.materialKeyword?.value?.trim() || '',
+        source_site_code: elements.materialSourceSiteCode?.value?.trim() || '',
+        source_type: elements.materialSourceType?.value || '',
+        material_status: elements.materialStatus?.value || '',
+        audit_status: elements.materialAuditStatus?.value || '',
+        tag: elements.materialTag?.value?.trim() || '',
     };
 }
 
@@ -991,14 +1183,20 @@ async function previewDraft(draftId) {
 }
 
 async function editDraft(draftId) {
+    const currentPage = document.body?.dataset?.page || '';
+    if (currentPage !== 'articles' || !elements.articleForm) {
+        window.location.href = `/articles?draft_id=${draftId}`;
+        return;
+    }
+    const messageTarget = elements.articleBuilderMessage || elements.draftListMessage;
     try {
-        showMessage(elements.draftListMessage, `正在加载草稿 ${draftId} 进入编辑器...`, 'info');
+        showMessage(messageTarget, `正在加载草稿 ${draftId} 进入编辑器...`, 'info');
         const draft = await loadDraftDetail(draftId);
         applyDraftToEditor(draft);
         renderDraftList();
-        showMessage(elements.draftListMessage, `草稿 ${draftId} 已回填到编辑器。`, 'success');
+        showMessage(messageTarget, `草稿 ${draftId} 已回填到编辑器。`, 'success');
     } catch (error) {
-        showMessage(elements.draftListMessage, error.message, 'error');
+        showMessage(messageTarget, error.message, 'error');
     }
 }
 
@@ -1314,6 +1512,65 @@ function clearArticleSelection() {
     showMessage(elements.articleBuilderMessage, '已清空组稿区素材。', 'info');
 }
 
+function selectedMaterialIdsFromCheckboxes() {
+    return Array.from(document.querySelectorAll('input[name="article-material-selector"]:checked'))
+        .map((item) => Number(item.value))
+        .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+function clearMaterialSelectionState(notify = true) {
+    state.articleMaterials = [];
+    state.articleCoverMaterialId = null;
+    clearArticlePreview();
+    renderArticleSelection();
+    renderMaterialList();
+    if (state.currentMaterial) {
+        renderMaterialDetail(state.currentMaterial);
+    }
+    if (notify) {
+        showMessage(elements.materialListMessage, '已清空素材勾选状态。', 'info');
+    }
+}
+
+async function bulkDeleteSelectedMaterials() {
+    const materialIds = selectedMaterialIdsFromCheckboxes();
+    if (!materialIds.length) {
+        showMessage(elements.materialListMessage, '请先勾选需要删除的素材。', 'error');
+        return;
+    }
+
+    if (!window.confirm(`确认批量删除选中的 ${materialIds.length} 条素材吗？`)) {
+        return;
+    }
+
+    showMessage(elements.materialListMessage, `正在批量删除 ${materialIds.length} 条素材...`, 'info');
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const materialId of materialIds) {
+        try {
+            const material = await request(`/api/materials/${materialId}/actions`, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'delete' }),
+            });
+            if (material.material_status === 'deleted') {
+                state.articleMaterials = state.articleMaterials.filter((item) => item.material.id !== material.id);
+            }
+            successCount += 1;
+        } catch (error) {
+            failedCount += 1;
+        }
+    }
+
+    ensureArticleCoverMaterialId();
+    clearArticlePreview();
+    await loadMaterials('正在刷新素材列表...');
+    await loadMaterialTags();
+
+    const resultText = `批量删除完成：成功 ${successCount} 条，失败 ${failedCount} 条。`;
+    showMessage(elements.materialListMessage, resultText, failedCount ? 'error' : 'success');
+}
+
 function buildArticlePayload() {
     const title = elements.articleTitle?.value.trim() || '';
     if (!title) {
@@ -1364,6 +1621,7 @@ function materialActions(material) {
 }
 
 function renderMaterialTagSummary() {
+    if (!elements.materialTagSummary) return;
     if (!state.materialTags.length) {
         elements.materialTagSummary.innerHTML = '暂无标签统计。';
         elements.materialTagSummary.className = 'tag-summary empty';
@@ -1376,6 +1634,7 @@ function renderMaterialTagSummary() {
 }
 
 function renderMaterialList() {
+    if (!elements.materialList || !elements.materialCount) return;
     elements.materialCount.textContent = `共 ${state.materials.length} 条`;
     if (!state.materials.length) {
         elements.materialList.innerHTML = '<div class="empty">当前筛选条件下暂无素材。</div>';
@@ -1415,6 +1674,7 @@ function renderMaterialList() {
 }
 
 function renderMaterialDetail(material) {
+    if (!elements.materialDetail) return;
     state.selectedMaterialId = material.id;
     state.currentMaterial = material;
     mergeMaterialIntoSelection(material);
@@ -1529,6 +1789,7 @@ async function loadMaterialTags() {
         state.materialTags = await request('/api/materials/tags/summary');
         renderMaterialTagSummary();
     } catch (error) {
+        if (!elements.materialTagSummary) return;
         elements.materialTagSummary.className = 'tag-summary empty';
         elements.materialTagSummary.textContent = error.message;
     }
@@ -1554,7 +1815,9 @@ async function loadMaterials(message = '正在加载素材库...') {
                 renderMaterialDetail(selected);
             } else {
                 state.selectedMaterialId = null;
-                elements.materialDetail.innerHTML = '<div class="empty">当前选中素材不在筛选结果中，请重新选择。</div>';
+                if (elements.materialDetail) {
+                    elements.materialDetail.innerHTML = '<div class="empty">当前选中素材不在筛选结果中，请重新选择。</div>';
+                }
             }
         }
         showMessage(
@@ -1902,7 +2165,9 @@ window.publishDraftToWechat = publishDraftToWechat;
 window.applyTagFilterByIndex = async function(index) {
     const item = state.materialTags[index];
     if (!item) return;
-    elements.materialTag.value = item.tag;
+    if (elements.materialTag) {
+        elements.materialTag.value = item.tag;
+    }
     await loadMaterials(`正在按标签“${item.tag}”筛选素材...`);
     showMessage(elements.materialFilterMessage, `已按标签“${item.tag}”筛选。`, 'success');
 };
@@ -1950,6 +2215,12 @@ if (elements.materialUploadForm) {
 if (elements.materialUploadResetButton) {
     elements.materialUploadResetButton.addEventListener('click', resetMaterialUploadForm);
 }
+if (elements.materialBulkDeleteButton) {
+    elements.materialBulkDeleteButton.addEventListener('click', bulkDeleteSelectedMaterials);
+}
+if (elements.materialSelectionClearButton) {
+    elements.materialSelectionClearButton.addEventListener('click', () => clearMaterialSelectionState(true));
+}
 if (elements.articleForm) {
     elements.articleForm.addEventListener('submit', generateArticlePreview);
 }
@@ -1974,16 +2245,85 @@ if (elements.wechatConfigRefreshButton) {
 if (elements.historyRefreshButton) {
     elements.historyRefreshButton.addEventListener('click', () => loadHistoryOverview('正在刷新历史记录与统计分析...'));
 }
+if (elements.loginForm) {
+    elements.loginForm.addEventListener('submit', submitLogin);
+}
+if (elements.accountProfileForm) {
+    elements.accountProfileForm.addEventListener('submit', submitAccountProfile);
+}
+if (elements.accountPasswordForm) {
+    elements.accountPasswordForm.addEventListener('submit', submitPasswordReset);
+}
+if (elements.sidebarLogoutButton) {
+    elements.sidebarLogoutButton.addEventListener('click', logoutCurrentUser);
+}
 
-resetSiteForm();
-renderArticleSelection();
-renderArticlePreview();
-updateArticleEditorState();
-renderHistoryOverview();
-loadSites();
-loadTasks();
-loadMaterials();
-loadMaterialTags();
-loadWechatConfigStatus();
-loadDrafts();
-loadHistoryOverview();
+async function initPage() {
+    const page = document.body?.dataset?.page || 'index';
+    applySidebarUser(null);
+
+    if (page === 'login') {
+        const current = await loadCurrentUser();
+        if (current) {
+            window.location.href = '/';
+        }
+        return;
+    }
+
+    const current = await loadCurrentUser({ redirectOnUnauthorized: true });
+    if (!current) {
+        return;
+    }
+
+    if (page === 'sites') {
+        resetSiteForm();
+        loadSites();
+        return;
+    }
+
+    if (page === 'crawl') {
+        loadSites();
+        loadTasks();
+        return;
+    }
+
+    if (page === 'materials') {
+        loadMaterials();
+        loadMaterialTags();
+        return;
+    }
+
+    if (page === 'articles') {
+        renderArticleSelection();
+        renderArticlePreview();
+        updateArticleEditorState();
+        loadMaterials();
+        loadMaterialTags();
+
+        const params = new URLSearchParams(window.location.search);
+        const draftId = Number(params.get('draft_id') || 0);
+        if (draftId) {
+            loadDrafts('正在加载草稿箱并回填编辑器...').then(() => editDraft(draftId));
+        }
+        return;
+    }
+
+    if (page === 'drafts') {
+        renderArticlePreview();
+        loadWechatConfigStatus();
+        loadDrafts();
+        return;
+    }
+
+    if (page === 'history') {
+        renderHistoryOverview();
+        loadHistoryOverview();
+        return;
+    }
+
+    if (page === 'account') {
+        loadAccountProfile();
+    }
+}
+
+initPage();

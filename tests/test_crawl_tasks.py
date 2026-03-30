@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image, ImageStat
 
 from app.main import app
 
@@ -24,6 +25,23 @@ def create_site(name: str, code: str, domain: str):
         },
     )
     assert response.status_code == 201
+
+
+def assert_image_has_visual_content(image_path: Path) -> None:
+    with Image.open(image_path) as image:
+        rgb_image = image.convert("RGB")
+        stat = ImageStat.Stat(rgb_image)
+        assert any(value > 20 for value in stat.var), f"图片纹理过于单一：{image_path}"
+
+        width, height = rgb_image.size
+        sample_points = [
+            (width // 6, height // 6),
+            (width // 2, height // 2),
+            (width * 5 // 6, height * 5 // 6),
+            (width // 3, height * 2 // 3),
+        ]
+        sampled_colors = {rgb_image.getpixel(point) for point in sample_points}
+        assert len(sampled_colors) >= 2, f"图片采样颜色未形成变化：{image_path}"
 
 
 def test_crawl_task_flow():
@@ -51,8 +69,12 @@ def test_crawl_task_flow():
     assert len(body["materials"]) == 4
 
     for material in body["materials"]:
-        assert (Path("data") / material["local_file_path"]).exists()
-        assert (Path("data") / material["local_thumbnail_path"]).exists()
+        image_path = Path("data") / material["local_file_path"]
+        thumbnail_path = Path("data") / material["local_thumbnail_path"]
+        assert image_path.exists()
+        assert thumbnail_path.exists()
+        assert_image_has_visual_content(image_path)
+        assert_image_has_visual_content(thumbnail_path)
 
     task_id = body["id"]
     detail_response = client.get(f"/api/crawl-tasks/{task_id}")
