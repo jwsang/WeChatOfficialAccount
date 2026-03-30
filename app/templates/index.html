@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body data-page="index">
+    <main class="container">
+        <nav class="top-nav card">
+            <a class="nav-brand" href="/">{{ app_name }}</a>
+            <div class="module-nav">
+                <a href="/sites" class="{% if page == 'sites' %}active{% endif %}">站点管理</a>
+                <a href="/crawl" class="{% if page == 'crawl' %}active{% endif %}">抓取任务</a>
+                <a href="/materials" class="{% if page == 'materials' %}active{% endif %}">素材库</a>
+                <a href="/articles" class="{% if page == 'articles' %}active{% endif %}">文章生成</a>
+                <a href="/drafts" class="{% if page == 'drafts' %}active{% endif %}">草稿箱</a>
+                <a href="/history" class="{% if page == 'history' %}active{% endif %}">历史统计</a>
+            </div>
+        </nav>
+
+        <header class="hero">
+            <h1>{{ app_name }}</h1>
+            <p>页面已按功能模块拆分，避免所有操作堆叠在一个页面中。请从下方入口进入对应模块。</p>
+        </header>
+
+        <section class="card">
+            <div class="section-header">
+                <h2>功能入口</h2>
+                <p class="muted">按业务流程拆分为独立页面，便于维护与使用。</p>
+            </div>
+            <div class="module-card-grid">
+                <a class="module-card" href="/sites">
+                    <h3>站点管理</h3>
+                    <p class="muted">站点新增、编辑、启停与规则测试。</p>
+                </a>
+                <a class="module-card" href="/crawl">
+                    <h3>抓取任务</h3>
+                    <p class="muted">任务创建、执行状态与详情查看。</p>
+                </a>
+                <a class="module-card" href="/materials">
+                    <h3>素材库管理</h3>
+                    <p class="muted">素材筛选、上传、详情与状态操作。</p>
+                </a>
+                <a class="module-card" href="/articles">
+                    <h3>文章生成</h3>
+                    <p class="muted">素材组稿、HTML 预览与草稿保存。</p>
+                </a>
+                <a class="module-card" href="/drafts">
+                    <h3>草稿箱管理</h3>
+                    <p class="muted">草稿预览、同步微信与发布操作。</p>
+                </a>
+                <a class="module-card" href="/history">
+                    <h3>历史统计</h3>
+                    <p class="muted">抓取、素材、发布与日志统计。</p>
+                </a>
+            </div>
+        </section>
+    </main>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
