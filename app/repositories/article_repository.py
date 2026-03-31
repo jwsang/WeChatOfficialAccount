@@ -1,6 +1,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.models.app_setting import AppSetting
 from app.models.article_draft import ArticleDraft
 from app.models.draft_material_relation import DraftMaterialRelation
 from app.models.material_image import MaterialImage
@@ -77,3 +78,24 @@ class ArticleRepository:
 
     def refresh(self, instance) -> None:
         self.db.refresh(instance)
+
+    def get_setting(self, setting_key: str) -> AppSetting | None:
+        statement = select(AppSetting).where(AppSetting.setting_key == setting_key)
+        return self.db.scalar(statement)
+
+    def get_setting_value(self, setting_key: str, default: str = "") -> str:
+        setting = self.get_setting(setting_key)
+        if setting is None:
+            return default
+        return setting.setting_value or default
+
+    def upsert_setting_value(self, setting_key: str, setting_value: str) -> AppSetting:
+        setting = self.get_setting(setting_key)
+        if setting is None:
+            setting = AppSetting(setting_key=setting_key, setting_value=setting_value)
+            self.db.add(setting)
+        else:
+            setting.setting_value = setting_value
+            self.db.add(setting)
+        self.db.flush()
+        return setting

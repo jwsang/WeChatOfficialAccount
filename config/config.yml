@@ -1,5 +1,4 @@
-wechat:
-  AppID: wx8d7f6f365f832739
-  AppSecret: 36b37d07820925f6d9aecb97201589ec
-
- API-Key : sk-5SMAvCG51mvtTUFM7rac7AJdhG7hWw86nPS3l0GJBDM4ASae
+openAi:
+  url : https://www.qiuner.top/v1
+  model : gpt-5.2
+  Key : sk-5SMAvCG51mvtTUFM7rac7AJdhG7hWw86nPS3l0GJBDM4ASae

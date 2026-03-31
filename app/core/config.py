@@ -58,13 +58,11 @@ _yaml_config = load_yaml_config()
 
 
 class Settings(BaseSettings):
-    app_name: str = "素材管理"
+    app_name: str = "工作台"
     app_env: str = "development"
     debug: bool = True
     database_url: str = Field(default=f"sqlite:///{(DATA_DIR / 'app.db').as_posix()}")
-    wechat_app_id: str = _yaml_config.get("wechat", {}).get("AppID", "")
-    wechat_app_secret: str = _yaml_config.get("wechat", {}).get("AppSecret", "")
-    api_key: str = _yaml_config.get("API-Key", "") or _yaml_config.get("API-Key ", "")
+    api_key: str = _yaml_config.get("openAi.Key", "") or _yaml_config.get("openAi.Key", "")
     session_secret: str = Field(default="wechat-official-account-dev-secret")
 
     model_config = SettingsConfigDict(

@@ -1,3 +1,4 @@
+from app.models.app_setting import AppSetting
 from app.models.article_draft import ArticleDraft
 from app.models.base import Base
 from app.models.crawl_task import CrawlTask

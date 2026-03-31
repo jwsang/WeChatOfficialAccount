@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from datetime import UTC, datetime
 
 from app.models.user_account import UserAccount
@@ -67,8 +68,14 @@ class UserService:
 
         if not self.verify_password(old_password, user.password_hash):
             raise ValueError("原密码不正确。")
-        if len(new_password) < 6:
-            raise ValueError("新密码长度至少 6 位。")
+        if len(new_password) < 8:
+            raise ValueError("新密码长度至少 8 位。")
+        if not re.search(r"[A-Za-z]", new_password):
+            raise ValueError("新密码必须包含至少 1 个字母。")
+        if not re.search(r"\d", new_password):
+            raise ValueError("新密码必须包含至少 1 个数字。")
+        if not re.search(r"[^A-Za-z0-9]", new_password):
+            raise ValueError("新密码必须包含至少 1 个特殊字符。")
         if old_password == new_password:
             raise ValueError("新密码不能与原密码相同。")
 

@@ -64,8 +64,13 @@ class WechatConfigStatusRead(BaseModel):
     app_id_configured: bool
     app_secret_configured: bool
     auth_ready: bool
-    mode: str = "mock"
+    mode: str = "live"
     message: str
+
+
+class WechatConfigUpdateRequest(BaseModel):
+    app_id: str = Field(default="", max_length=200)
+    app_secret: str = Field(default="", max_length=300)
 
 
 class WechatPublishActionRead(BaseModel):

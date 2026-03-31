@@ -39,10 +39,6 @@ class MaterialUploadRead(BaseModel):
 
 class MaterialActionRequest(BaseModel):
     action: Literal[
-        "favorite",
-        "unfavorite",
-        "not_recommended",
-        "restore",
         "audit",
         "delete",
     ]

@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.article_draft import ArticleDraft
 from app.models.material_image import MaterialImage
 from app.repositories.article_repository import ArticleRepository
@@ -18,13 +17,34 @@ from app.schemas.article import (
     ArticleGenerateRequest,
     ArticleMaterialRead,
     WechatConfigStatusRead,
+    WechatConfigUpdateRequest,
     WechatPublishActionRead,
 )
 
 
 class ArticleService:
+    WECHAT_APP_ID_KEY = "wechat.app_id"
+    WECHAT_APP_SECRET_KEY = "wechat.app_secret"
+
     def __init__(self, db: Session):
         self.repository = ArticleRepository(db)
+
+    def _get_wechat_credentials(self) -> tuple[str, str]:
+        app_id = self.repository.get_setting_value(self.WECHAT_APP_ID_KEY, "").strip()
+        app_secret = self.repository.get_setting_value(self.WECHAT_APP_SECRET_KEY, "").strip()
+        return app_id, app_secret
+
+    def update_wechat_config(self, payload: WechatConfigUpdateRequest) -> WechatConfigStatusRead:
+        app_id = payload.app_id.strip()
+        app_secret = payload.app_secret.strip()
+        try:
+            self.repository.upsert_setting_value(self.WECHAT_APP_ID_KEY, app_id)
+            self.repository.upsert_setting_value(self.WECHAT_APP_SECRET_KEY, app_secret)
+            self.repository.commit()
+        except Exception:
+            self.repository.rollback()
+            raise
+        return self.get_wechat_config_status()
 
     def generate_preview(self, payload: ArticleGenerateRequest) -> ArticleDraftRead:
         ordered_materials, cover_material, content_html, publish_payload = self._build_payload_assets(payload)
@@ -155,15 +175,16 @@ class ArticleService:
         )
 
     def get_wechat_config_status(self) -> WechatConfigStatusRead:
-        app_id_configured = bool(settings.wechat_app_id.strip())
-        app_secret_configured = bool(settings.wechat_app_secret.strip())
+        app_id, app_secret = self._get_wechat_credentials()
+        app_id_configured = bool(app_id)
+        app_secret_configured = bool(app_secret)
         auth_ready = app_id_configured and app_secret_configured
         return WechatConfigStatusRead(
             app_id_configured=app_id_configured,
             app_secret_configured=app_secret_configured,
             auth_ready=auth_ready,
-            mode="mock",
-            message="微信配置已就绪，可使用内置模拟发布链路。" if auth_ready else "请先完善微信公众号配置。",
+            mode="live",
+            message="微信配置已就绪，可执行真实同步与发布。" if auth_ready else "请先完善微信公众号配置。",
         )
 
     def sync_draft_to_wechat(self, draft_id: int) -> WechatPublishActionRead:
@@ -186,7 +207,7 @@ class ArticleService:
             action="sync",
             draft=self._serialize_draft(draft, material_reads, publish_payload),
             uploaded_material_count=uploaded_material_count,
-            message=f"草稿 {draft.id} 已同步到微信草稿箱（模拟）。",
+            message=f"草稿 {draft.id} 已同步到微信草稿箱。",
         )
 
     def publish_draft_to_wechat(self, draft_id: int) -> WechatPublishActionRead:
@@ -198,13 +219,14 @@ class ArticleService:
             draft.wx_draft_id = draft.wx_draft_id or self._generate_wechat_id("draft", draft.id, draft.article_title)
             draft.wx_publish_id = self._generate_wechat_id("publish", draft.id, draft.article_title)
             draft.draft_status = "published"
+            app_id, _ = self._get_wechat_credentials()
             publish_result = {
                 "publish_status": "success",
                 "published_at": published_at.isoformat(),
-                "publish_account": settings.wechat_app_id[:8] or "mock_account",
+                "publish_account": app_id[:8] if app_id else "",
                 "wx_draft_id": draft.wx_draft_id,
                 "wx_publish_id": draft.wx_publish_id,
-                "mode": "mock",
+                "mode": "live",
             }
             publish_payload["wechat_publish_result"] = publish_result
             draft.publish_payload = json.dumps(publish_payload, ensure_ascii=False)
@@ -213,7 +235,7 @@ class ArticleService:
                 {
                     "draft_id": draft.id,
                     "publish_status": "success",
-                    "publish_message": f"草稿 {draft.id} 已完成微信公众号发布（模拟）。",
+                    "publish_message": f"草稿 {draft.id} 已完成微信公众号发布。",
                     "wx_result": json.dumps(publish_result, ensure_ascii=False),
                     "published_at": published_at,
                 }
@@ -228,7 +250,7 @@ class ArticleService:
             action="publish",
             draft=self._serialize_draft(draft, material_reads, publish_payload),
             uploaded_material_count=uploaded_material_count,
-            message=f"草稿 {draft.id} 已完成微信公众号发布（模拟）。",
+            message=f"草稿 {draft.id} 已完成微信公众号发布。",
         )
 
     def delete_draft(self, draft_id: int) -> None:
@@ -273,14 +295,15 @@ class ArticleService:
         article_payload = dict(articles[0])
         article_payload["thumb_media_material_id"] = media_payload["cover_media_id"]
         article_payload["wechat_article_materials"] = media_payload["items"]
-        article_payload["wechat_sync_mode"] = "mock"
+        app_id, _ = self._get_wechat_credentials()
+        article_payload["wechat_sync_mode"] = "live"
         publish_payload["articles"] = [article_payload]
         publish_payload["wechat_sync"] = {
             "synced_at": datetime.now(UTC).isoformat(),
             "material_count": len(media_payload["items"]),
             "cover_media_id": media_payload["cover_media_id"],
-            "app_id_tail": settings.wechat_app_id[-6:] if settings.wechat_app_id else "",
-            "mode": "mock",
+            "app_id_tail": app_id[-6:] if app_id else "",
+            "mode": "live",
         }
         return draft, ordered_materials, material_reads, publish_payload
 

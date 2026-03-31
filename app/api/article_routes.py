@@ -8,12 +8,14 @@ from app.schemas.article import (
     ArticleDraftUpdateRequest,
     ArticleGenerateRequest,
     WechatConfigStatusRead,
+    WechatConfigUpdateRequest,
     WechatPublishActionRead,
 )
 from app.services.article_service import ArticleService
 
 
 router = APIRouter(prefix="/api/articles", tags=["articles"])
+legacy_router = APIRouter(prefix="/api/article", tags=["articles-legacy"])
 
 
 def get_article_service(db: Session = Depends(get_db)) -> ArticleService:
@@ -73,6 +75,29 @@ def get_wechat_config_status(
     service: ArticleService = Depends(get_article_service),
 ):
     return service.get_wechat_config_status()
+
+
+@router.put("/wechat/config", response_model=WechatConfigStatusRead)
+def update_wechat_config(
+    payload: WechatConfigUpdateRequest,
+    service: ArticleService = Depends(get_article_service),
+):
+    return service.update_wechat_config(payload)
+
+
+@legacy_router.get("/wechat/config-status", response_model=WechatConfigStatusRead)
+def get_wechat_config_status_legacy(
+    service: ArticleService = Depends(get_article_service),
+):
+    return service.get_wechat_config_status()
+
+
+@legacy_router.put("/wechat/config", response_model=WechatConfigStatusRead)
+def update_wechat_config_legacy(
+    payload: WechatConfigUpdateRequest,
+    service: ArticleService = Depends(get_article_service),
+):
+    return service.update_wechat_config(payload)
 
 
 @router.post("/drafts/{draft_id}/sync", response_model=WechatPublishActionRead)

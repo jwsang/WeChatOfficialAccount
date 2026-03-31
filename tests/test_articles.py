@@ -170,6 +170,16 @@ def test_article_draft_box_management_flow():
     assert "自定义正文 HTML" in update_body["content_html"]
     assert update_body["publish_payload"]["articles"][0]["title"] == "夏日湖畔图文（修订）"
 
+    config_response = client.put(
+        "/api/articles/wechat/config",
+        json={
+            "app_id": "wx_test_appid_123456",
+            "app_secret": "wx_test_secret_abcdef",
+        },
+    )
+    assert config_response.status_code == 200
+    assert config_response.json()["auth_ready"] is True
+
     sync_status_response = client.get("/api/articles/wechat/config-status")
     assert sync_status_response.status_code == 200
     assert sync_status_response.json()["auth_ready"] is True

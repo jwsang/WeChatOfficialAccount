@@ -115,24 +115,21 @@ class MaterialService:
         if not material:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="素材不存在")
 
-        tags = self._split_tags(material.tag_codes)
-        if payload.action == "favorite":
-            if "favorite" not in tags:
-                tags.append("favorite")
-        elif payload.action == "unfavorite":
-            tags = [tag for tag in tags if tag != "favorite"]
-        elif payload.action == "not_recommended":
-            material.material_status = "not_recommended"
-        elif payload.action == "restore":
-            material.material_status = "available"
-        elif payload.action == "audit":
+        if payload.action == "audit":
             material.audit_status = "approved"
-        elif payload.action == "delete":
-            material.material_status = "deleted"
+            updated = self.repository.save_material(material)
+            return self._serialize_material(updated)
 
-        material.tag_codes = "|".join(dict.fromkeys(tags))
-        updated = self.repository.save_material(material)
-        return self._serialize_material(updated)
+        if payload.action == "delete":
+            deleted_view = self._serialize_material(material)
+            deleted_view.material_status = "deleted"
+            local_paths = [material.local_file_path, material.local_thumbnail_path]
+            self.repository.delete_material(material)
+            for relative_path in local_paths:
+                self._delete_local_asset(relative_path)
+            return deleted_view
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的素材操作")
 
     def list_tag_summary(self) -> list[MaterialTagSummaryRead]:
         counter: dict[str, int] = {}
@@ -197,6 +194,20 @@ class MaterialService:
     def _split_tags(self, raw_tags: str) -> list[str]:
         normalized = raw_tags.replace("，", "|").replace(",", "|").replace(" ", "|")
         return [tag.strip() for tag in normalized.split("|") if tag.strip()]
+
+    def _delete_local_asset(self, relative_path: str) -> None:
+        normalized = (relative_path or "").strip().lstrip("/\\")
+        if not normalized:
+            return
+
+        target_path = (DATA_DIR / normalized).resolve()
+        try:
+            target_path.relative_to(DATA_DIR.resolve())
+        except ValueError:
+            return
+
+        if target_path.exists() and target_path.is_file():
+            target_path.unlink()
 
     def _resolve_material_name(self, upload_file: UploadFile, title: str | None, index: int) -> str:
         if title and len(title.strip()) > 0:

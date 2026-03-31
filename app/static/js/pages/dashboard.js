@@ -94,9 +94,12 @@ const elements = {
     materialList: document.getElementById('material-list'),
     materialCount: document.getElementById('material-count'),
     materialSelectAllButton: document.getElementById('material-select-all-button'),
+    materialBulkFavoriteButton: document.getElementById('material-bulk-favorite-button'),
     materialBulkAuditButton: document.getElementById('material-bulk-audit-button'),
     materialBulkAddArticleButton: document.getElementById('material-bulk-add-article-button'),
+    materialBulkNotRecommendedButton: document.getElementById('material-bulk-not-recommended-button'),
     materialBulkDeleteButton: document.getElementById('material-bulk-delete-button'),
+    materialSelectionClearButton: document.getElementById('material-selection-clear-button'),
     materialDetail: document.getElementById('material-detail'),
     materialDetailModal: document.getElementById('material-detail-modal'),
     materialDetailModalBackdrop: document.getElementById('material-detail-modal-backdrop'),
@@ -123,9 +126,6 @@ const elements = {
     draftListMessage: document.getElementById('draft-list-message'),
     draftList: document.getElementById('draft-list'),
     draftRefreshButton: document.getElementById('draft-refresh-button'),
-    wechatConfigForm: document.getElementById('wechat-config-form'),
-    wechatAppId: document.getElementById('wechat-app-id'),
-    wechatAppSecret: document.getElementById('wechat-app-secret'),
     wechatConfigMessage: document.getElementById('wechat-config-message'),
     wechatConfigStatus: document.getElementById('wechat-config-status'),
     wechatConfigRefreshButton: document.getElementById('wechat-config-refresh-button'),
@@ -159,10 +159,6 @@ const elements = {
     accountNewPassword: document.getElementById('account-new-password'),
     accountConfirmPassword: document.getElementById('account-confirm-password'),
     accountPasswordMessage: document.getElementById('account-password-message'),
-    accountPasswordStrength: document.getElementById('account-password-strength'),
-    accountPasswordStrengthFill: document.getElementById('account-password-strength-fill'),
-    accountPasswordStrengthText: document.getElementById('account-password-strength-text'),
-    accountPasswordRuleList: document.getElementById('account-password-rule-list'),
 };
 
 function formatDate(value) {
@@ -371,66 +367,6 @@ async function submitAccountProfile(event) {
     }
 }
 
-function evaluatePasswordStrength(password) {
-    const source = String(password || '');
-    const rules = {
-        length: source.length >= 8,
-        letter: /[A-Za-z]/.test(source),
-        number: /\d/.test(source),
-        special: /[^A-Za-z0-9]/.test(source),
-    };
-    const passedCount = Object.values(rules).filter(Boolean).length;
-
-    if (!source) {
-        return {
-            rules,
-            passedCount,
-            score: 0,
-            level: 'empty',
-            text: '密码强度：未输入',
-        };
-    }
-
-    const score = Math.min(100, passedCount * 25 + (source.length >= 12 ? 10 : 0));
-    if (passedCount <= 1) {
-        return { rules, passedCount, score, level: 'weak', text: '密码强度：弱' };
-    }
-    if (passedCount <= 3) {
-        return { rules, passedCount, score, level: 'medium', text: '密码强度：中' };
-    }
-    return { rules, passedCount, score, level: 'strong', text: '密码强度：强' };
-}
-
-function renderPasswordStrength(password) {
-    const result = evaluatePasswordStrength(password);
-
-    if (elements.accountPasswordStrengthFill) {
-        elements.accountPasswordStrengthFill.style.width = `${result.score}%`;
-        elements.accountPasswordStrengthFill.className = `password-strength-fill ${result.level}`;
-    }
-    if (elements.accountPasswordStrengthText) {
-        elements.accountPasswordStrengthText.textContent = result.text;
-    }
-    if (elements.accountPasswordStrength) {
-        const progressBar = elements.accountPasswordStrength.querySelector('[role="progressbar"]');
-        if (progressBar) {
-            progressBar.setAttribute('aria-valuenow', String(result.score));
-        }
-    }
-    if (elements.accountPasswordRuleList) {
-        const items = elements.accountPasswordRuleList.querySelectorAll('.password-rule-item');
-        items.forEach((item) => {
-            const rule = item.dataset.rule;
-            if (!rule) return;
-            const passed = Boolean(result.rules[rule]);
-            item.classList.toggle('passed', passed);
-            item.classList.toggle('failed', !passed);
-        });
-    }
-
-    return result;
-}
-
 async function submitPasswordReset(event) {
     event.preventDefault();
     if (!elements.accountOldPassword || !elements.accountNewPassword || !elements.accountConfirmPassword) return;
@@ -438,14 +374,8 @@ async function submitPasswordReset(event) {
     const oldPassword = elements.accountOldPassword.value;
     const newPassword = elements.accountNewPassword.value;
     const confirmPassword = elements.accountConfirmPassword.value;
-    if (!oldPassword || !newPassword || !confirmPassword) {
+    if (!oldPassword || !newPassword) {
         showMessage(elements.accountPasswordMessage, '请完整填写密码信息。', 'error');
-        return;
-    }
-
-    const strength = renderPasswordStrength(newPassword);
-    if (strength.passedCount < 4) {
-        showMessage(elements.accountPasswordMessage, '新密码不符合规则：至少 8 位，且需包含字母、数字和特殊字符。', 'error');
         return;
     }
     if (newPassword !== confirmPassword) {
@@ -467,7 +397,6 @@ async function submitPasswordReset(event) {
         if (elements.accountPasswordForm) {
             elements.accountPasswordForm.reset();
         }
-        renderPasswordStrength('');
         showMessage(elements.accountPasswordMessage, '密码重置成功。', 'success');
     } catch (error) {
         showMessage(elements.accountPasswordMessage, error.message, 'error');
@@ -932,31 +861,6 @@ async function loadWechatConfigStatus(message = '正在检查微信公众号配�
     } catch (error) {
         state.wechatConfigStatus = null;
         renderWechatConfigStatus();
-        showMessage(elements.wechatConfigMessage, error.message, 'error');
-    }
-}
-
-async function submitWechatConfig(event) {
-    event.preventDefault();
-    const payload = {
-        app_id: elements.wechatAppId?.value?.trim() || '',
-        app_secret: elements.wechatAppSecret?.value?.trim() || '',
-    };
-
-    try {
-        showMessage(elements.wechatConfigMessage, '正在保存微信公众号配置...', 'info');
-        state.wechatConfigStatus = await request('/api/articles/wechat/config', {
-            method: 'PUT',
-            body: JSON.stringify(payload),
-        });
-        renderWechatConfigStatus();
-        showMessage(
-            elements.wechatConfigMessage,
-            state.wechatConfigStatus.message || '微信公众号配置已保存。',
-            state.wechatConfigStatus.auth_ready ? 'success' : 'info',
-        );
-        renderDraftList();
-    } catch (error) {
         showMessage(elements.wechatConfigMessage, error.message, 'error');
     }
 }
@@ -1837,6 +1741,20 @@ function selectAllVisibleMaterials() {
     showMessage(elements.materialListMessage, `已全选当前列表中 ${state.articleMaterials.length} 条可用素材。`, 'success');
 }
 
+function clearMaterialSelectionState(notify = true) {
+    state.articleMaterials = [];
+    state.articleCoverMaterialId = null;
+    clearArticlePreview();
+    renderArticleSelection();
+    renderMaterialList();
+    if (state.currentMaterial) {
+        renderMaterialDetail(state.currentMaterial);
+    }
+    if (notify) {
+        showMessage(elements.materialListMessage, '已清空素材勾选状态。', 'info');
+    }
+}
+
 async function bulkUpdateMaterialAction(action, actionText, { confirmMessage = '' } = {}) {
     const materialIds = selectedMaterialIdsFromCheckboxes();
     if (!materialIds.length) {
@@ -1912,8 +1830,16 @@ function bulkAddSelectedMaterialsToArticle() {
     );
 }
 
+async function bulkFavoriteSelectedMaterials() {
+    await bulkUpdateMaterialAction('favorite', '收藏');
+}
+
 async function bulkAuditSelectedMaterials() {
     await bulkUpdateMaterialAction('audit', '审核通过');
+}
+
+async function bulkMarkNotRecommendedSelectedMaterials() {
+    await bulkUpdateMaterialAction('not_recommended', '标记不推荐');
 }
 
 async function bulkDeleteSelectedMaterials() {
@@ -1948,12 +1874,16 @@ function buildArticlePayload() {
 
 function materialActions(material) {
     const page = document.body?.dataset?.page || '';
-    if (page === 'materials' || page === 'articles') {
+    if (page === 'materials') {
         return '';
     }
 
     const actions = [];
+    const selected = isMaterialSelectedForArticle(material.id);
     actions.push(`<button type="button" class="secondary" onclick="loadMaterialDetail(${material.id})">查看详情</button>`);
+    if (material.material_status !== 'deleted') {
+        actions.push(`<button type="button" class="${selected ? 'ghost' : 'secondary'}" onclick="${selected ? `removeArticleMaterial(${material.id})` : `quickAddArticleMaterial(${material.id})`}">${selected ? '移出组稿' : '加入组稿'}</button>`);
+    }
     return actions.join('');
 }
 
@@ -2017,16 +1947,13 @@ function renderMaterialTagSummary() {
 
 function renderMaterialList() {
     if (!elements.materialList || !elements.materialCount) return;
-
-    const page = document.body?.dataset?.page || '';
-    const visibleMaterials = page === 'articles'
-        ? state.materials.filter((item) => item.material_status !== 'deleted' && item.audit_status === 'approved')
-        : state.materials;
-
-    const selectableCount = visibleMaterials.filter((item) => item.material_status !== 'deleted').length;
-    const hasSelected = visibleMaterials.some((item) => item.material_status !== 'deleted' && isMaterialSelectedForArticle(item.id));
+    const selectableCount = state.materials.filter((item) => item.material_status !== 'deleted').length;
+    const hasSelected = state.materials.some((item) => item.material_status !== 'deleted' && isMaterialSelectedForArticle(item.id));
     if (elements.materialSelectAllButton) {
         elements.materialSelectAllButton.disabled = selectableCount === 0;
+    }
+    if (elements.materialBulkFavoriteButton) {
+        elements.materialBulkFavoriteButton.disabled = !hasSelected;
     }
     if (elements.materialBulkAuditButton) {
         elements.materialBulkAuditButton.disabled = !hasSelected;
@@ -2034,34 +1961,22 @@ function renderMaterialList() {
     if (elements.materialBulkAddArticleButton) {
         elements.materialBulkAddArticleButton.disabled = !hasSelected;
     }
+    if (elements.materialBulkNotRecommendedButton) {
+        elements.materialBulkNotRecommendedButton.disabled = !hasSelected;
+    }
     if (elements.materialBulkDeleteButton) {
         elements.materialBulkDeleteButton.disabled = !hasSelected;
     }
 
-    elements.materialCount.textContent = `共 ${visibleMaterials.length} 条`;
-    if (!visibleMaterials.length) {
+    elements.materialCount.textContent = `共 ${state.materials.length} 条`;
+    if (!state.materials.length) {
         elements.materialList.innerHTML = '<div class="empty">当前筛选条件下暂无素材。</div>';
         return;
     }
 
-    elements.materialList.innerHTML = visibleMaterials.map((material) => {
+    const page = document.body?.dataset?.page || '';
+    elements.materialList.innerHTML = state.materials.map((material) => {
         const imagePath = material.local_thumbnail_path || material.local_file_path || '';
-
-        if (page === 'articles') {
-            return `
-        <article class="material-item ${state.selectedMaterialId === material.id ? 'active' : ''}">
-            <div class="material-image-wrap">
-                <button type="button" class="material-image-button" onclick="loadMaterialDetail(${material.id})" aria-label="查看素材 ${material.id} 详情">
-                    <img src="/data/${encodeURI(imagePath)}" alt="${escapeHtml(material.material_name)}" />
-                </button>
-                <label class="selection-checkbox selection-checkbox-floating">
-                    <input type="checkbox" name="article-material-selector" value="${material.id}" ${isMaterialSelectedForArticle(material.id) ? 'checked' : ''} ${material.material_status === 'deleted' ? 'disabled' : ''} onchange="setArticleMaterialChecked(${material.id}, this.checked)" />
-                </label>
-            </div>
-        </article>
-    `;
-        }
-
         const actionHtml = page === 'materials'
             ? ''
             : `
@@ -2071,18 +1986,31 @@ function renderMaterialList() {
             `;
         return `
         <article class="material-item ${state.selectedMaterialId === material.id ? 'active' : ''}">
-            <div class="material-image-wrap">
-                <button type="button" class="material-image-button" onclick="loadMaterialDetail(${material.id})" aria-label="查看素材 ${material.id} 详情">
-                    <img src="/data/${encodeURI(imagePath)}" alt="${escapeHtml(material.material_name)}" />
-                </button>
-                <label class="selection-checkbox selection-checkbox-floating">
-                    <input type="checkbox" name="article-material-selector" value="${material.id}" ${isMaterialSelectedForArticle(material.id) ? 'checked' : ''} ${material.material_status === 'deleted' ? 'disabled' : ''} onchange="setArticleMaterialChecked(${material.id}, this.checked)" />
-                </label>
+            <button type="button" class="material-image-button" onclick="loadMaterialDetail(${material.id})" aria-label="查看素材 ${material.id} 详情">
+                <img src="/data/${encodeURI(imagePath)}" alt="${escapeHtml(material.material_name)}" />
+            </button>
+            <div class="item-header compact-header">
+                <div>
+                    <h3>${escapeHtml(material.material_name)}</h3>
+                    <div class="muted">素材 ID：${material.id}</div>
+                </div>
+                <div class="material-card-tools">
+                    <label class="selection-checkbox">
+                        <input type="checkbox" name="article-material-selector" value="${material.id}" ${isMaterialSelectedForArticle(material.id) ? 'checked' : ''} ${material.material_status === 'deleted' ? 'disabled' : ''} onchange="setArticleMaterialChecked(${material.id}, this.checked)" />
+                        <span>${material.material_status === 'deleted' ? '已删除' : '组稿'}</span>
+                    </label>
+                    <span class="status ${statusClass(material.material_status)}">${escapeHtml(material.material_status)}</span>
+                </div>
             </div>
-            <div class="status-row block-top">
-                <span class="status ${statusClass(material.material_status)}">${escapeHtml(material.material_status)}</span>
+            <div class="status-row">
                 <span class="status ${statusClass(material.audit_status)}">审核：${escapeHtml(material.audit_status)}</span>
                 <span class="status ${materialSourceStatusClass(material.source_type)}">来源：${escapeHtml(materialSourceTypeLabel(material.source_type))}</span>
+            </div>
+            <div class="meta-grid compact-grid block-top">
+                <div><span class="muted">关键词</span><strong>${escapeHtml(material.search_keyword || '无')}</strong></div>
+                <div><span class="muted">站点</span><strong>${escapeHtml(material.source_site_code || '无')}</strong></div>
+                <div><span class="muted">尺寸</span><strong>${material.image_width} × ${material.image_height}</strong></div>
+                <div><span class="muted">标签</span><strong>${escapeHtml(material.tag_codes || '无')}</strong></div>
             </div>
             ${actionHtml}
         </article>
@@ -2666,14 +2594,23 @@ if (elements.materialUploadResetButton) {
 if (elements.materialSelectAllButton) {
     elements.materialSelectAllButton.addEventListener('click', selectAllVisibleMaterials);
 }
+if (elements.materialBulkFavoriteButton) {
+    elements.materialBulkFavoriteButton.addEventListener('click', bulkFavoriteSelectedMaterials);
+}
 if (elements.materialBulkAuditButton) {
     elements.materialBulkAuditButton.addEventListener('click', bulkAuditSelectedMaterials);
 }
 if (elements.materialBulkAddArticleButton) {
     elements.materialBulkAddArticleButton.addEventListener('click', bulkAddSelectedMaterialsToArticle);
 }
+if (elements.materialBulkNotRecommendedButton) {
+    elements.materialBulkNotRecommendedButton.addEventListener('click', bulkMarkNotRecommendedSelectedMaterials);
+}
 if (elements.materialBulkDeleteButton) {
     elements.materialBulkDeleteButton.addEventListener('click', bulkDeleteSelectedMaterials);
+}
+if (elements.materialSelectionClearButton) {
+    elements.materialSelectionClearButton.addEventListener('click', () => clearMaterialSelectionState(true));
 }
 if (elements.materialDetailModalCloseButton) {
     elements.materialDetailModalCloseButton.addEventListener('click', closeMaterialDetailModal);
@@ -2699,9 +2636,6 @@ if (elements.articleResetButton) {
 if (elements.draftRefreshButton) {
     elements.draftRefreshButton.addEventListener('click', () => loadDrafts('正在刷新草稿箱...'));
 }
-if (elements.wechatConfigForm) {
-    elements.wechatConfigForm.addEventListener('submit', submitWechatConfig);
-}
 if (elements.wechatConfigRefreshButton) {
     elements.wechatConfigRefreshButton.addEventListener('click', () => loadWechatConfigStatus('正在刷新微信公众号配置...'));
 }
@@ -2716,15 +2650,6 @@ if (elements.accountProfileForm) {
 }
 if (elements.accountPasswordForm) {
     elements.accountPasswordForm.addEventListener('submit', submitPasswordReset);
-    elements.accountPasswordForm.addEventListener('reset', () => {
-        window.setTimeout(() => renderPasswordStrength(''), 0);
-    });
-}
-if (elements.accountNewPassword) {
-    elements.accountNewPassword.addEventListener('input', () => {
-        renderPasswordStrength(elements.accountNewPassword.value);
-    });
-    renderPasswordStrength(elements.accountNewPassword.value || '');
 }
 if (elements.topbarLogoutButton) {
     elements.topbarLogoutButton.addEventListener('click', logoutCurrentUser);

@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.models.draft_material_relation import DraftMaterialRelation
 from app.models.material_image import MaterialImage
 
 
@@ -31,3 +32,10 @@ class MaterialRepository:
         self.db.commit()
         self.db.refresh(material)
         return material
+
+    def delete_material(self, material: MaterialImage) -> None:
+        self.db.execute(
+            delete(DraftMaterialRelation).where(DraftMaterialRelation.material_id == material.id)
+        )
+        self.db.delete(material)
+        self.db.commit()

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{ app_name }} - {% block page_title %}{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css" />
+    {% block extra_css %}{% endblock %}
 </head>
 <body data-page="{% block page_id %}{% endblock %}" class="{% if page == 'login' %}is-login-page{% endif %}">
     <div class="app-shell{% if page == 'login' %} auth-shell{% endif %}">
@@ -13,6 +14,26 @@
         {% endif %}
 
         <main class="page-main{% if page == 'login' %} login-main{% endif %}">
+            {% if page != "login" %}
+                <header class="page-topbar">
+                    <div class="user-menu" id="topbar-user-menu-container">
+                        <button
+                            type="button"
+                            class="user-avatar-button"
+                            id="topbar-user-trigger"
+                            aria-haspopup="true"
+                            aria-expanded="false"
+                            aria-controls="topbar-user-menu"
+                        >
+                            <span class="user-avatar-badge" id="topbar-user-avatar">Admin</span>
+                            <span class="user-avatar-caret">▾</span>
+                        </button>
+                        <div class="user-dropdown-menu" id="topbar-user-menu" hidden>
+                            <button type="button" class="user-dropdown-item danger user-topbar-logout" id="topbar-logout-button" style="display: none;">退出登录</button>
+                        </div>
+                    </div>
+                </header>
+            {% endif %}
             <div class="container{% if page == 'login' %} auth-container{% endif %}">
                 {% block page_body %}{% endblock %}
             </div>
@@ -20,5 +41,6 @@
     </div>
 
     <script src="/static/js/app.js"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

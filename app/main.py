@@ -13,6 +13,7 @@ if __name__ == "__main__" and __package__ is None:
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
+from app.api.article_routes import legacy_router as article_legacy_router
 from app.api.article_routes import router as article_router
 from app.api.auth_routes import router as auth_router
 from app.api.crawl_routes import router as crawl_router
@@ -37,6 +38,7 @@ app.include_router(site_router)
 app.include_router(crawl_router)
 app.include_router(material_router)
 app.include_router(article_router)
+app.include_router(article_legacy_router)
 app.include_router(history_router)
 
 with SessionLocal() as _db:
@@ -70,7 +72,7 @@ def login_page(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return render_page(request, "index.html", "index")
+    return render_page(request, "history.html", "history")
 
 
 @app.get("/sites", response_class=HTMLResponse)
@@ -81,6 +83,11 @@ def sites_page(request: Request):
 @app.get("/crawl", response_class=HTMLResponse)
 def crawl_page(request: Request):
     return render_page(request, "crawl.html", "crawl")
+
+
+@app.get("/ai-assist", response_class=HTMLResponse)
+def ai_assist_page(request: Request):
+    return render_page(request, "ai_assist.html", "ai_assist")
 
 
 @app.get("/materials", response_class=HTMLResponse)
