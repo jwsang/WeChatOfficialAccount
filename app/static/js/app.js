@@ -16,6 +16,9 @@ const state = {
     wechatConfigStatus: null,
     historyOverview: null,
     currentUser: null,
+    aiAssistConfig: null,
+    aiGeneratedResults: [],
+    aiSelectedTempIds: [],
 };
 
 const elements = {
@@ -24,6 +27,8 @@ const elements = {
     name: document.getElementById('name'),
     code: document.getElementById('code'),
     domain: document.getElementById('domain'),
+    siteAiPrefillButton: document.getElementById('site-ai-prefill-button'),
+    siteAiPrefillMessage: document.getElementById('site-ai-prefill-message'),
     crawlMethod: document.getElementById('crawl_method'),
     searchRule: document.getElementById('search_rule'),
     parseRule: document.getElementById('parse_rule'),
@@ -95,7 +100,6 @@ const elements = {
     materialCount: document.getElementById('material-count'),
     materialSelectAllButton: document.getElementById('material-select-all-button'),
     materialBulkAuditButton: document.getElementById('material-bulk-audit-button'),
-    materialBulkAddArticleButton: document.getElementById('material-bulk-add-article-button'),
     materialBulkDeleteButton: document.getElementById('material-bulk-delete-button'),
     materialDetail: document.getElementById('material-detail'),
     materialDetailModal: document.getElementById('material-detail-modal'),
@@ -163,6 +167,37 @@ const elements = {
     accountPasswordStrengthFill: document.getElementById('account-password-strength-fill'),
     accountPasswordStrengthText: document.getElementById('account-password-strength-text'),
     accountPasswordRuleList: document.getElementById('account-password-rule-list'),
+    aiConfigForm: document.getElementById('ai-config-form'),
+    aiConfigBaseUrl: document.getElementById('ai-config-base-url'),
+    aiConfigModel: document.getElementById('ai-config-model'),
+    aiConfigApiKey: document.getElementById('ai-config-api-key'),
+    aiConfigDefaultSize: document.getElementById('ai-config-default-size'),
+    aiConfigDefaultQuality: document.getElementById('ai-config-default-quality'),
+    aiConfigDefaultStyle: document.getElementById('ai-config-default-style'),
+    aiConfigDefaultCount: document.getElementById('ai-config-default-count'),
+    aiConfigTimeout: document.getElementById('ai-config-timeout'),
+    aiConfigNegativePrompt: document.getElementById('ai-config-negative-prompt'),
+    aiConfigMessage: document.getElementById('ai-config-message'),
+    aiConfigApiKeyMask: document.getElementById('ai-config-api-key-mask'),
+    aiGenerateForm: document.getElementById('ai-generate-form'),
+    aiPrompt: document.getElementById('ai-generate-prompt'),
+    aiNegativePrompt: document.getElementById('ai-generate-negative-prompt'),
+    aiGenerateCount: document.getElementById('ai-generate-count'),
+    aiGenerateSize: document.getElementById('ai-generate-size'),
+    aiGenerateQuality: document.getElementById('ai-generate-quality'),
+    aiGenerateStyle: document.getElementById('ai-generate-style'),
+    aiReferenceImage: document.getElementById('ai-generate-reference-image'),
+    aiGenerateMessage: document.getElementById('ai-generate-message'),
+    aiGeneratedSummary: document.getElementById('ai-generated-summary'),
+    aiGeneratedList: document.getElementById('ai-generated-list'),
+    aiSelectAllButton: document.getElementById('ai-select-all-button'),
+    aiClearSelectionButton: document.getElementById('ai-clear-selection-button'),
+    aiAddMaterialButton: document.getElementById('ai-add-material-button'),
+    aiMaterialTitlePrefix: document.getElementById('ai-material-title-prefix'),
+    aiMaterialKeywords: document.getElementById('ai-material-keywords'),
+    aiMaterialTags: document.getElementById('ai-material-tags'),
+    aiMaterialRemark: document.getElementById('ai-material-remark'),
+    aiMaterialMessage: document.getElementById('ai-material-message'),
 };
 
 function formatDate(value) {
@@ -533,6 +568,43 @@ function renderRuleConfigSummary(ruleConfig = {}) {
     return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
 }
 
+function applySiteAiSuggestionToForm(suggestion = {}) {
+    if (!suggestion || typeof suggestion !== 'object') return;
+
+    if (elements.name && suggestion.name) {
+        elements.name.value = suggestion.name;
+    }
+    if (elements.domain && suggestion.domain) {
+        elements.domain.value = suggestion.domain;
+    }
+    if (elements.code && suggestion.code && (!elements.code.disabled || !elements.code.value.trim())) {
+        elements.code.value = suggestion.code;
+    }
+
+    if (elements.enabled) {
+        const enabledValue = typeof suggestion.enabled === 'boolean' ? suggestion.enabled : true;
+        elements.enabled.value = String(enabledValue);
+    }
+    if (elements.crawlMethod && suggestion.crawl_method) {
+        elements.crawlMethod.value = suggestion.crawl_method;
+    }
+    if (elements.searchRule && suggestion.search_rule) {
+        elements.searchRule.value = suggestion.search_rule;
+    }
+    if (elements.parseRule && suggestion.parse_rule) {
+        elements.parseRule.value = suggestion.parse_rule;
+    }
+    if (elements.pageRule && suggestion.page_rule) {
+        elements.pageRule.value = suggestion.page_rule;
+    }
+    if (elements.remark && suggestion.remark) {
+        elements.remark.value = suggestion.remark;
+    }
+    if (suggestion.rule_config && typeof suggestion.rule_config === 'object') {
+        applyRuleConfigToForm(suggestion.rule_config);
+    }
+}
+
 function resetSiteForm() {
     if (!elements.form) return;
     elements.form.reset();
@@ -542,6 +614,7 @@ function resetSiteForm() {
     if (elements.code) elements.code.disabled = false;
     if (elements.submitButton) elements.submitButton.textContent = '保存站点';
     state.selectedSiteId = null;
+    showMessage(elements.siteAiPrefillMessage, '');
     showMessage(elements.formMessage, '已切换为新增站点模式。', 'info');
     renderSiteList();
 }
@@ -557,6 +630,184 @@ function resetMaterialFilters() {
     elements.materialFilterForm.reset();
     syncMaterialSourceQuickFilterButtons();
     showMessage(elements.materialFilterMessage, '已清空素材筛选条件。', 'info');
+}
+
+function applyAiConfigToForm(config = {}) {
+    if (elements.aiConfigBaseUrl) elements.aiConfigBaseUrl.value = config.base_url || '';
+    if (elements.aiConfigModel) elements.aiConfigModel.value = config.model || '';
+    if (elements.aiConfigDefaultSize) elements.aiConfigDefaultSize.value = config.default_size || '1024x1024';
+    if (elements.aiConfigDefaultQuality) elements.aiConfigDefaultQuality.value = config.default_quality || 'standard';
+    if (elements.aiConfigDefaultStyle) elements.aiConfigDefaultStyle.value = config.default_style || 'vivid';
+    if (elements.aiConfigDefaultCount) elements.aiConfigDefaultCount.value = String(config.default_count || 4);
+    if (elements.aiConfigTimeout) elements.aiConfigTimeout.value = String(config.timeout_seconds || 120);
+    if (elements.aiConfigNegativePrompt) {
+        elements.aiConfigNegativePrompt.value = config.default_negative_prompt || '';
+    }
+    if (elements.aiGenerateCount) elements.aiGenerateCount.value = String(config.default_count || 4);
+    if (elements.aiGenerateSize) elements.aiGenerateSize.value = config.default_size || '1024x1024';
+    if (elements.aiGenerateQuality) elements.aiGenerateQuality.value = config.default_quality || 'standard';
+    if (elements.aiGenerateStyle) elements.aiGenerateStyle.value = config.default_style || 'vivid';
+    if (elements.aiNegativePrompt) elements.aiNegativePrompt.value = config.default_negative_prompt || '';
+    if (elements.aiConfigApiKeyMask) {
+        elements.aiConfigApiKeyMask.textContent = config.has_api_key
+            ? `已保存密钥：${config.api_key_masked || '******'}`
+            : '尚未保存 API Key';
+    }
+}
+
+function syncAiSelectionActions() {
+    const total = state.aiGeneratedResults.length;
+    const selected = state.aiSelectedTempIds.length;
+    if (elements.aiGeneratedSummary) {
+        elements.aiGeneratedSummary.textContent = total
+            ? `已生成 ${total} 张，已选择 ${selected} 张。`
+            : '暂无生成结果。';
+    }
+    if (elements.aiSelectAllButton) elements.aiSelectAllButton.disabled = total === 0 || selected === total;
+    if (elements.aiClearSelectionButton) elements.aiClearSelectionButton.disabled = selected === 0;
+    if (elements.aiAddMaterialButton) elements.aiAddMaterialButton.disabled = selected === 0;
+}
+
+function renderAiGeneratedResults() {
+    if (!elements.aiGeneratedList) return;
+    const rows = state.aiGeneratedResults || [];
+    if (!rows.length) {
+        elements.aiGeneratedList.innerHTML = '<div class="empty">暂无生成图片，请先填写提示词后生成。</div>';
+        syncAiSelectionActions();
+        return;
+    }
+
+    const selectedSet = new Set(state.aiSelectedTempIds || []);
+    elements.aiGeneratedList.innerHTML = rows
+        .map((item) => {
+            const checked = selectedSet.has(item.temp_id);
+            return `
+                <article class="ai-generated-item${checked ? ' selected' : ''}">
+                    <label class="checkbox-item ai-generated-check">
+                        <input
+                            type="checkbox"
+                            ${checked ? 'checked' : ''}
+                            onchange="toggleAiGeneratedSelection('${escapeHtml(item.temp_id)}', this.checked)"
+                        />
+                        <span>选择入素材库</span>
+                    </label>
+                    <img class="ai-generated-thumb" src="${escapeHtml(item.preview_url)}" alt="AI 生成图" />
+                    <div class="muted">尺寸：${item.width} × ${item.height}</div>
+                    <div class="muted">生成时间：${formatDate(item.created_at)}</div>
+                </article>
+            `;
+        })
+        .join('');
+    syncAiSelectionActions();
+}
+
+async function loadAiAssistConfig(message = '正在加载 AI 配置...') {
+    try {
+        showMessage(elements.aiConfigMessage, message, 'info');
+        const config = await request('/api/ai-assist/config');
+        state.aiAssistConfig = config;
+        applyAiConfigToForm(config);
+        showMessage(elements.aiConfigMessage, 'AI 配置加载完成。', 'success');
+    } catch (error) {
+        showMessage(elements.aiConfigMessage, error.message, 'error');
+    }
+}
+
+async function submitAiAssistConfig(event) {
+    event.preventDefault();
+    const payload = {
+        base_url: elements.aiConfigBaseUrl?.value?.trim() || '',
+        model: elements.aiConfigModel?.value?.trim() || '',
+        default_size: elements.aiConfigDefaultSize?.value?.trim() || '1024x1024',
+        default_quality: elements.aiConfigDefaultQuality?.value?.trim() || 'standard',
+        default_style: elements.aiConfigDefaultStyle?.value?.trim() || 'vivid',
+        default_count: Number(elements.aiConfigDefaultCount?.value || 4),
+        timeout_seconds: Number(elements.aiConfigTimeout?.value || 120),
+        default_negative_prompt: elements.aiConfigNegativePrompt?.value?.trim() || '',
+        api_key: elements.aiConfigApiKey?.value || '',
+    };
+
+    try {
+        showMessage(elements.aiConfigMessage, '正在保存 AI 配置...', 'info');
+        const result = await request('/api/ai-assist/config', {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+        state.aiAssistConfig = result;
+        applyAiConfigToForm(result);
+        if (elements.aiConfigApiKey) elements.aiConfigApiKey.value = '';
+        showMessage(elements.aiConfigMessage, 'AI 配置保存成功。', 'success');
+    } catch (error) {
+        showMessage(elements.aiConfigMessage, error.message, 'error');
+    }
+}
+
+async function submitAiGenerate(event) {
+    event.preventDefault();
+    const prompt = elements.aiPrompt?.value?.trim() || '';
+    if (!prompt) {
+        showMessage(elements.aiGenerateMessage, '请输入生成提示词。', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('prompt', prompt);
+    formData.append('negative_prompt', elements.aiNegativePrompt?.value?.trim() || '');
+    formData.append('count', String(Number(elements.aiGenerateCount?.value || 4)));
+    formData.append('size', elements.aiGenerateSize?.value?.trim() || '1024x1024');
+    formData.append('quality', elements.aiGenerateQuality?.value?.trim() || 'standard');
+    formData.append('style', elements.aiGenerateStyle?.value?.trim() || 'vivid');
+
+    const file = elements.aiReferenceImage?.files?.[0];
+    if (file) {
+        formData.append('reference_image', file);
+    }
+
+    try {
+        showMessage(elements.aiGenerateMessage, '正在生成图片，请稍候...', 'info');
+        const result = await request('/api/ai-assist/generate', {
+            method: 'POST',
+            body: formData,
+        });
+        const generated = result.generated || [];
+        state.aiGeneratedResults = generated;
+        state.aiSelectedTempIds = generated.map((item) => item.temp_id);
+        renderAiGeneratedResults();
+        showMessage(elements.aiGenerateMessage, `生成完成，共 ${generated.length} 张图片。`, 'success');
+    } catch (error) {
+        showMessage(elements.aiGenerateMessage, error.message, 'error');
+    }
+}
+
+async function addAiSelectedToMaterials() {
+    const selected = state.aiSelectedTempIds || [];
+    if (!selected.length) {
+        showMessage(elements.aiMaterialMessage, '请先选择至少一张生成图片。', 'error');
+        return;
+    }
+
+    const payload = {
+        temp_ids: selected,
+        title_prefix: elements.aiMaterialTitlePrefix?.value?.trim() || 'AI素材',
+        keywords: elements.aiMaterialKeywords?.value?.trim() || '',
+        tags: elements.aiMaterialTags?.value?.trim() || 'AI',
+        remark: elements.aiMaterialRemark?.value?.trim() || '',
+    };
+
+    try {
+        showMessage(elements.aiMaterialMessage, '正在加入素材库...', 'info');
+        const result = await request('/api/ai-assist/materials', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+        showMessage(
+            elements.aiMaterialMessage,
+            `已加入素材库：新增 ${result.uploaded.length}，去重 ${result.duplicate_count}，失效 ${result.missing_count}。新增素材已自动审核通过。`,
+            'success',
+        );
+    } catch (error) {
+        showMessage(elements.aiMaterialMessage, error.message, 'error');
+    }
 }
 
 function normalizeSourceType(value) {
@@ -1259,7 +1510,7 @@ async function publishDraftToWechat(draftId) {
         });
         syncDraftState(result.draft);
         await loadDrafts('正在刷新草稿箱...');
-        showMessage(elements.draftListMessage, result.message || `草稿 ${draftId} 已发布完成。`, 'success');
+        showMessage(elements.draftListMessage, result.message || `草稿 ${draftId} 发布请求已提交。`, 'success');
     } catch (error) {
         showMessage(elements.draftListMessage, error.message, 'error');
     }
@@ -1297,6 +1548,10 @@ function renderDraftList() {
         const syncDisabled = wechatReady ? '' : 'disabled';
         const publishDisabled = wechatReady ? '' : 'disabled';
         const publishText = draft.wx_publish_id ? '重新发布' : '发布';
+        const wxDraftStateLabel = draft.wx_draft_id ? '已同步' : '待同步';
+        const wxPublishStateLabel = draft.draft_status === 'published'
+            ? '已发布'
+            : (draft.draft_status === 'publishing' ? '发布中' : (draft.draft_status === 'publish_failed' ? '发布失败' : '未发布'));
         return `
             <article class="draft-item ${active ? 'active' : ''}">
                 <div class="draft-cover">
@@ -1320,9 +1575,9 @@ function renderDraftList() {
                     </div>
                     <div class="draft-summary block-top">${escapeHtml(draft.article_summary || '暂无摘要')}</div>
                     <div class="wechat-meta-list block-top">
-                        <span class="wechat-meta-chip">微信草稿状态：${escapeHtml(draft.wx_draft_id ? '已同步' : '待同步')}</span>
-                        <span class="wechat-meta-chip">微信公众号发布：${escapeHtml(draft.wx_publish_id ? '已发布' : '未发布')}</span>
-                        <span class="wechat-meta-chip">发布通道：${wechatReady ? 'live 已就绪' : '配置未就绪'}</span>
+                        <span class="wechat-meta-chip">微信草稿状态：${escapeHtml(wxDraftStateLabel)}</span>
+                        <span class="wechat-meta-chip">微信公众号发布：${escapeHtml(wxPublishStateLabel)}</span>
+                        <span class="wechat-meta-chip">发布通道：${wechatReady ? 'live 真实发布已就绪' : '配置未就绪'}</span>
                     </div>
                     <div class="task-actions block-top">
                         <button type="button" class="secondary" onclick="previewDraft(${draft.id})">预览草稿</button>
@@ -1879,39 +2134,6 @@ async function bulkUpdateMaterialAction(action, actionText, { confirmMessage = '
     showMessage(elements.materialListMessage, resultText, failedCount ? 'error' : 'success');
 }
 
-function bulkAddSelectedMaterialsToArticle() {
-    const materialIds = selectedMaterialIdsFromCheckboxes();
-    if (!materialIds.length) {
-        showMessage(elements.materialListMessage, '请先勾选需要加入组稿的素材。', 'error');
-        return;
-    }
-
-    let addedCount = 0;
-    let skippedCount = 0;
-    for (const materialId of materialIds) {
-        const material = resolveMaterialById(materialId);
-        if (!material || isMaterialSelectedForArticle(materialId)) {
-            skippedCount += 1;
-            continue;
-        }
-        state.articleMaterials.push({
-            material: { ...material },
-            captionText: '',
-        });
-        addedCount += 1;
-    }
-
-    ensureArticleCoverMaterialId();
-    clearArticlePreview();
-    renderArticleSelection();
-    renderMaterialList();
-    showMessage(
-        elements.materialListMessage,
-        `批量加入组稿完成：新增 ${addedCount} 条，跳过 ${skippedCount} 条。`,
-        addedCount ? 'success' : 'info',
-    );
-}
-
 async function bulkAuditSelectedMaterials() {
     await bulkUpdateMaterialAction('audit', '审核通过');
 }
@@ -2030,9 +2252,6 @@ function renderMaterialList() {
     }
     if (elements.materialBulkAuditButton) {
         elements.materialBulkAuditButton.disabled = !hasSelected;
-    }
-    if (elements.materialBulkAddArticleButton) {
-        elements.materialBulkAddArticleButton.disabled = !hasSelected;
     }
     if (elements.materialBulkDeleteButton) {
         elements.materialBulkDeleteButton.disabled = !hasSelected;
@@ -2153,6 +2372,34 @@ function selectedSiteCodes() {
     return Array.from(document.querySelectorAll('input[name="crawl-site-code"]:checked')).map((item) => item.value);
 }
 
+async function triggerSiteAiPrefill() {
+    const domain = elements.domain?.value?.trim() || '';
+    if (!domain) {
+        showMessage(elements.siteAiPrefillMessage, '请先输入站点域名。', 'error');
+        return;
+    }
+
+    if (elements.siteAiPrefillButton) {
+        elements.siteAiPrefillButton.disabled = true;
+    }
+    try {
+        showMessage(elements.siteAiPrefillMessage, '正在调用 AI 生成站点建议...', 'info');
+        const result = await request('/api/sites/ai-prefill', {
+            method: 'POST',
+            body: JSON.stringify({ domain }),
+        });
+        applySiteAiSuggestionToForm(result?.suggestion || {});
+        showMessage(elements.siteAiPrefillMessage, result?.message || 'AI 自动填充完成。', 'success');
+        showMessage(elements.formMessage, '已根据域名自动回填站点信息，请人工确认后再保存。', 'info');
+    } catch (error) {
+        showMessage(elements.siteAiPrefillMessage, error.message, 'error');
+    } finally {
+        if (elements.siteAiPrefillButton) {
+            elements.siteAiPrefillButton.disabled = false;
+        }
+    }
+}
+
 function fillSiteForm(site) {
     state.selectedSiteId = site.id;
     elements.siteId.value = site.id;
@@ -2168,6 +2415,7 @@ function fillSiteForm(site) {
     elements.enabled.value = String(site.enabled);
     applyRuleConfigToForm(site.rule_config || {});
     elements.submitButton.textContent = '更新站点';
+    showMessage(elements.siteAiPrefillMessage, '');
     showMessage(elements.formMessage, `当前正在编辑站点：${site.name}`, 'info');
     renderSiteList();
 }
@@ -2600,10 +2848,23 @@ window.applyTagFilterByIndex = async function(index) {
     await loadMaterials(`正在按标签“${item.tag}”筛选素材...`);
     showMessage(elements.materialFilterMessage, `已按标签“${item.tag}”筛选。`, 'success');
 };
+window.toggleAiGeneratedSelection = function(tempId, checked) {
+    const normalized = String(tempId || '').trim();
+    if (!normalized) return;
+    const current = new Set(state.aiSelectedTempIds || []);
+    if (checked) {
+        current.add(normalized);
+    } else {
+        current.delete(normalized);
+    }
+    state.aiSelectedTempIds = Array.from(current);
+    renderAiGeneratedResults();
+};
 
 if (elements.form) elements.form.addEventListener('submit', saveSite);
 if (elements.resetButton) elements.resetButton.addEventListener('click', resetSiteForm);
 if (elements.refreshButton) elements.refreshButton.addEventListener('click', loadSites);
+if (elements.siteAiPrefillButton) elements.siteAiPrefillButton.addEventListener('click', triggerSiteAiPrefill);
 if (elements.testButton) elements.testButton.addEventListener('click', runTest);
 if (elements.crawlForm) elements.crawlForm.addEventListener('submit', createTask);
 if (elements.crawlRefreshButton) elements.crawlRefreshButton.addEventListener('click', loadTasks);
@@ -2669,9 +2930,6 @@ if (elements.materialSelectAllButton) {
 if (elements.materialBulkAuditButton) {
     elements.materialBulkAuditButton.addEventListener('click', bulkAuditSelectedMaterials);
 }
-if (elements.materialBulkAddArticleButton) {
-    elements.materialBulkAddArticleButton.addEventListener('click', bulkAddSelectedMaterialsToArticle);
-}
 if (elements.materialBulkDeleteButton) {
     elements.materialBulkDeleteButton.addEventListener('click', bulkDeleteSelectedMaterials);
 }
@@ -2726,6 +2984,27 @@ if (elements.accountNewPassword) {
     });
     renderPasswordStrength(elements.accountNewPassword.value || '');
 }
+if (elements.aiConfigForm) {
+    elements.aiConfigForm.addEventListener('submit', submitAiAssistConfig);
+}
+if (elements.aiGenerateForm) {
+    elements.aiGenerateForm.addEventListener('submit', submitAiGenerate);
+}
+if (elements.aiSelectAllButton) {
+    elements.aiSelectAllButton.addEventListener('click', () => {
+        state.aiSelectedTempIds = (state.aiGeneratedResults || []).map((item) => item.temp_id);
+        renderAiGeneratedResults();
+    });
+}
+if (elements.aiClearSelectionButton) {
+    elements.aiClearSelectionButton.addEventListener('click', () => {
+        state.aiSelectedTempIds = [];
+        renderAiGeneratedResults();
+    });
+}
+if (elements.aiAddMaterialButton) {
+    elements.aiAddMaterialButton.addEventListener('click', addAiSelectedToMaterials);
+}
 if (elements.topbarLogoutButton) {
     elements.topbarLogoutButton.addEventListener('click', logoutCurrentUser);
 }
@@ -2776,6 +3055,14 @@ async function initPage() {
     if (page === 'crawl') {
         loadSites();
         loadTasks();
+        return;
+    }
+
+    if (page === 'ai_assist') {
+        state.aiGeneratedResults = [];
+        state.aiSelectedTempIds = [];
+        renderAiGeneratedResults();
+        loadAiAssistConfig();
         return;
     }
 

@@ -1,10 +1,20 @@
+import json
+import re
 from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlparse
 
+import httpx
 from fastapi import HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.core.config import load_yaml_config, settings
+from app.repositories.article_repository import ArticleRepository
 from app.repositories.site_repository import SiteRepository
 from app.schemas.site import (
+    SiteAiPrefillResponse,
+    SiteAiPrefillSuggestion,
     SiteConfigCreate,
     SiteConfigRead,
     SiteConfigUpdate,
@@ -13,9 +23,13 @@ from app.schemas.site import (
 )
 
 
+SITE_AI_CONFIG_KEY = "ai_assist.config"
+
+
 class SiteService:
     def __init__(self, db: Session):
         self.repository = SiteRepository(db)
+        self.setting_repository = ArticleRepository(db)
 
     def list_sites(self) -> list[SiteConfigRead]:
         return [SiteConfigRead.model_validate(site) for site in self.repository.list_sites()]
@@ -41,6 +55,17 @@ class SiteService:
         if not site:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="站点不存在")
         self.repository.delete(site)
+
+    def ai_prefill_site(self, domain: str) -> SiteAiPrefillResponse:
+        normalized_domain = self._normalize_domain(domain)
+        suggestion = self._generate_site_prefill_by_ai(normalized_domain)
+        sanitized = self._sanitize_site_ai_suggestion(suggestion, normalized_domain)
+        return SiteAiPrefillResponse(
+            domain=normalized_domain,
+            success=True,
+            message="AI 已完成站点配置建议生成，请人工确认后保存",
+            suggestion=sanitized,
+        )
 
     def test_site(self, site_id: int, keyword: str) -> SiteTestResponse:
         site = self.repository.get_by_id(site_id)
@@ -78,6 +103,277 @@ class SiteService:
             message="测试抓取成功，已返回样例结果",
             applied_rule_config=rule_config,
         )
+
+    def _generate_site_prefill_by_ai(self, domain: str) -> SiteAiPrefillSuggestion | dict[str, Any]:
+        ai_config = self._resolve_ai_prefill_config()
+        api_key = str(ai_config.get("api_key") or "").strip()
+        if not api_key:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先在 AI 辅助页面配置 API Key")
+
+        payload = self._call_ai_site_prefill(
+            base_url=str(ai_config.get("base_url") or "").strip(),
+            model=str(ai_config.get("model") or "").strip(),
+            api_key=api_key,
+            timeout_seconds=int(ai_config.get("timeout_seconds") or 120),
+            domain=domain,
+        )
+        if isinstance(payload, dict) and isinstance(payload.get("suggestion"), dict):
+            return payload["suggestion"]
+        return payload
+
+    def _resolve_ai_prefill_config(self) -> dict[str, Any]:
+        yaml_config = load_yaml_config()
+        openai_config = yaml_config.get("openAi") if isinstance(yaml_config, dict) else {}
+        openai_config = openai_config if isinstance(openai_config, dict) else {}
+
+        config: dict[str, Any] = {
+            "base_url": str(openai_config.get("url") or "https://api.openai.com/v1").strip().rstrip("/"),
+            "model": str(openai_config.get("model") or "gpt-4o-mini").strip(),
+            "timeout_seconds": 120,
+            "api_key": str(
+                openai_config.get("Key")
+                or openai_config.get("key")
+                or settings.api_key
+                or ""
+            ).strip(),
+        }
+
+        raw_saved = self.setting_repository.get_setting_value(SITE_AI_CONFIG_KEY, "")
+        if raw_saved.strip():
+            try:
+                saved = json.loads(raw_saved)
+            except json.JSONDecodeError:
+                saved = {}
+            if isinstance(saved, dict):
+                if str(saved.get("base_url") or "").strip():
+                    config["base_url"] = str(saved.get("base_url")).strip().rstrip("/")
+                if str(saved.get("model") or "").strip():
+                    config["model"] = str(saved.get("model")).strip()
+                if str(saved.get("api_key") or "").strip():
+                    config["api_key"] = str(saved.get("api_key")).strip()
+                timeout_value = saved.get("timeout_seconds")
+                if isinstance(timeout_value, int) and timeout_value > 0:
+                    config["timeout_seconds"] = timeout_value
+
+        return config
+
+    def _call_ai_site_prefill(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str,
+        timeout_seconds: int,
+        domain: str,
+    ) -> dict[str, Any]:
+        normalized_base_url = base_url.rstrip("/")
+        if not normalized_base_url:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI 接口地址不能为空")
+        if not model.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI 模型不能为空")
+
+        system_prompt = (
+            "你是站点抓取配置助手。请仅返回 JSON，不要输出任何解释。"
+            "JSON 必须包含字段：name, code, domain, enabled, search_rule, parse_rule, page_rule, remark, crawl_method, rule_config。"
+            "rule_config 必须包含字段：search_url_template, result_container_path, image_url_path, source_page_url_path, "
+            "title_path, pagination_param, pagination_start, pagination_size_param, request_method, request_headers, "
+            "request_query_template, extra_notes。"
+            "crawl_method 仅允许：API接口、HTML解析、RSS/Feed。request_method 仅允许：GET、POST。"
+            "输出必须是可被 JSON.parse 解析的对象。"
+        )
+        user_prompt = (
+            f"请为域名 {domain} 生成公众号素材抓取站点配置建议。"
+            "请优先给出 API 或页面搜索规则，路径可用合理占位。"
+            "code 使用小写字母数字下划线。"
+        )
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        request_payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+        }
+
+        try:
+            with httpx.Client(timeout=timeout_seconds) as client:
+                response = client.post(
+                    f"{normalized_base_url}/chat/completions",
+                    headers=headers,
+                    json=request_payload,
+                )
+        except httpx.HTTPError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"AI 站点建议生成失败：{exc}",
+            ) from exc
+
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口返回非 JSON 数据") from exc
+
+        if not response.is_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"AI 接口调用失败（HTTP {response.status_code}）：{body}",
+            )
+
+        choices = body.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口返回内容缺失 choices")
+
+        message = choices[0].get("message") if isinstance(choices[0], dict) else None
+        content = message.get("content") if isinstance(message, dict) else None
+        if isinstance(content, list):
+            content = "".join(
+                str(item.get("text") or "")
+                for item in content
+                if isinstance(item, dict)
+            )
+        payload = self._extract_json_dict(content)
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 返回内容解析失败")
+        return payload
+
+    def _extract_json_dict(self, content: Any) -> dict[str, Any]:
+        if isinstance(content, dict):
+            return content
+        if not isinstance(content, str):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 返回内容为空")
+
+        text = content.strip()
+        if not text:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 返回内容为空")
+
+        fenced = re.search(r"```(?:json)?\s*(\{[\s\S]*\})\s*```", text, flags=re.IGNORECASE)
+        if fenced:
+            text = fenced.group(1).strip()
+
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, dict):
+                return payload
+        except json.JSONDecodeError:
+            pass
+
+        fallback = re.search(r"\{[\s\S]*\}", text)
+        if fallback:
+            try:
+                payload = json.loads(fallback.group(0))
+                if isinstance(payload, dict):
+                    return payload
+            except json.JSONDecodeError:
+                pass
+
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 返回 JSON 结构解析失败")
+
+    def _sanitize_site_ai_suggestion(
+        self,
+        raw_suggestion: SiteAiPrefillSuggestion | dict[str, Any],
+        domain: str,
+    ) -> SiteAiPrefillSuggestion:
+        if isinstance(raw_suggestion, SiteAiPrefillSuggestion):
+            payload = raw_suggestion.model_dump()
+        else:
+            payload = dict(raw_suggestion or {})
+
+        try:
+            rule_config = self._load_rule_config(payload.get("rule_config"))
+        except (ValidationError, TypeError, ValueError):
+            rule_config = SiteRuleConfig()
+
+        crawl_method = str(payload.get("crawl_method") or "HTML解析").strip()
+        if crawl_method not in {"API接口", "HTML解析", "RSS/Feed"}:
+            crawl_method = "HTML解析"
+
+        raw_code = str(payload.get("code") or self._build_site_code_from_domain(domain)).strip()
+        code = self._ensure_unique_code(self._normalize_code(raw_code))
+
+        name = str(payload.get("name") or "").strip()
+        if not name:
+            seed = domain.split(".")[0] if domain else "新站点"
+            name = f"{seed}站点"
+
+        search_rule = str(payload.get("search_rule") or "").strip() or self._format_search_rule(rule_config)
+        parse_rule = str(payload.get("parse_rule") or "").strip() or self._format_parse_rule(rule_config)
+        page_rule = str(payload.get("page_rule") or "").strip() or self._format_page_rule(rule_config)
+        remark = str(payload.get("remark") or "").strip() or f"AI 根据域名 {domain} 自动生成，请人工复核"
+
+        return SiteAiPrefillSuggestion(
+            name=name[:100],
+            code=code[:100],
+            domain=domain,
+            enabled=self._to_bool(payload.get("enabled"), default=True),
+            search_rule=search_rule,
+            parse_rule=parse_rule,
+            page_rule=page_rule,
+            remark=remark,
+            crawl_method=crawl_method,
+            rule_config=rule_config,
+        )
+
+    def _to_bool(self, value: Any, default: bool = True) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
+
+    def _normalize_domain(self, raw_domain: str) -> str:
+        candidate = str(raw_domain or "").strip().lower()
+        if not candidate:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请输入站点域名")
+
+        parsed = urlparse(candidate if "://" in candidate else f"https://{candidate}")
+        host = (parsed.netloc or parsed.path or "").strip().lower()
+        host = host.split("/")[0].split(":")[0].strip(".")
+        if not host:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="站点域名格式不正确")
+
+        try:
+            host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            pass
+
+        if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", host):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="站点域名格式不正确")
+        if "." not in host:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请输入有效域名，例如 example.com")
+        return host
+
+    def _build_site_code_from_domain(self, domain: str) -> str:
+        segments = [segment for segment in domain.split(".") if segment and segment != "www"]
+        if not segments:
+            return "site"
+        return self._normalize_code("_".join(segments))
+
+    def _normalize_code(self, raw_value: str) -> str:
+        normalized = re.sub(r"[^a-z0-9_]+", "_", str(raw_value or "").lower().replace("-", "_"))
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+        return (normalized or "site")[:100]
+
+    def _ensure_unique_code(self, base_code: str) -> str:
+        normalized_base = self._normalize_code(base_code)
+        candidate = normalized_base
+        index = 2
+        while self.repository.get_by_code(candidate):
+            suffix = f"_{index}"
+            candidate = f"{normalized_base[: max(1, 100 - len(suffix))]}{suffix}"
+            index += 1
+        return candidate
 
     def _sync_legacy_rules(self, payload: SiteConfigCreate | SiteConfigUpdate) -> SiteConfigCreate | SiteConfigUpdate:
         data = payload.model_dump(exclude_unset=isinstance(payload, SiteConfigUpdate))

@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.schemas.site import (
+    SiteAiPrefillRequest,
+    SiteAiPrefillResponse,
     SiteConfigCreate,
     SiteConfigRead,
     SiteConfigUpdate,
@@ -43,3 +45,8 @@ def delete_site(site_id: int, service: SiteService = Depends(get_site_service)):
 @router.post("/{site_id}/test", response_model=SiteTestResponse)
 def test_site(site_id: int, payload: SiteTestRequest, service: SiteService = Depends(get_site_service)):
     return service.test_site(site_id, payload.keyword)
+
+
+@router.post("/ai-prefill", response_model=SiteAiPrefillResponse)
+def ai_prefill_site(payload: SiteAiPrefillRequest, service: SiteService = Depends(get_site_service)):
+    return service.ai_prefill_site(payload.domain)

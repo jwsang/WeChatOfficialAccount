@@ -6,11 +6,155 @@
 {% block page_body %}
 <section class="card">
     <div class="section-header">
-        <h2>AI辅助</h2>
-        <p class="muted">该页面用于承载后续 AI 能力（如选题建议、标题优化、内容润色）。</p>
+        <h2>AI 辅助配置</h2>
+        <p class="muted">配置模型参数并保存复用，支持文生图和参考图辅助生成。</p>
     </div>
-    <div class="message info block-top">
-        当前版本已开放菜单与页面入口，后续可在此接入具体 AI 功能模块。
+    <form id="ai-config-form" class="form-grid">
+        <div class="two-columns grid">
+            <div class="field">
+                <label for="ai-config-base-url">接口地址（Base URL）</label>
+                <input id="ai-config-base-url" type="text" placeholder="https://api.openai.com/v1" required />
+            </div>
+            <div class="field">
+                <label for="ai-config-model">模型名称</label>
+                <input id="ai-config-model" type="text" placeholder="gpt-image-1" required />
+            </div>
+        </div>
+
+        <div class="two-columns grid">
+            <div class="field">
+                <label for="ai-config-api-key">API Key（留空则保留已保存值）</label>
+                <input id="ai-config-api-key" type="password" placeholder="sk-..." />
+                <small class="muted" id="ai-config-api-key-mask">尚未保存 API Key</small>
+            </div>
+            <div class="field">
+                <label for="ai-config-timeout">请求超时（秒）</label>
+                <input id="ai-config-timeout" type="number" min="20" max="300" value="120" />
+            </div>
+        </div>
+
+        <div class="three-columns grid">
+            <div class="field">
+                <label for="ai-config-default-size">默认尺寸</label>
+                <input id="ai-config-default-size" type="text" value="1024x1024" />
+            </div>
+            <div class="field">
+                <label for="ai-config-default-quality">默认质量</label>
+                <input id="ai-config-default-quality" type="text" value="standard" />
+            </div>
+            <div class="field">
+                <label for="ai-config-default-style">默认风格</label>
+                <input id="ai-config-default-style" type="text" value="vivid" />
+            </div>
+        </div>
+
+        <div class="two-columns grid">
+            <div class="field">
+                <label for="ai-config-default-count">默认生成数量</label>
+                <input id="ai-config-default-count" type="number" min="1" max="6" value="4" />
+            </div>
+            <div class="field">
+                <label for="ai-config-negative-prompt">默认负向提示词</label>
+                <input id="ai-config-negative-prompt" type="text" placeholder="如：文字、水印、低清晰度" />
+            </div>
+        </div>
+
+        <div class="actions block-top">
+            <button type="submit">保存配置</button>
+        </div>
+    </form>
+    <div id="ai-config-message" class="block-top"></div>
+</section>
+
+<section class="card">
+    <div class="section-header">
+        <h2>AI 图片生成</h2>
+        <p class="muted">支持文字描述生成，或上传参考图进行辅助生成。</p>
+    </div>
+    <form id="ai-generate-form" class="form-grid" enctype="multipart/form-data">
+        <div class="field">
+            <label for="ai-generate-prompt">提示词（Prompt）</label>
+            <textarea id="ai-generate-prompt" placeholder="请输入你希望生成的图片描述" required></textarea>
+        </div>
+        <div class="field">
+            <label for="ai-generate-negative-prompt">负向提示词（可选）</label>
+            <textarea id="ai-generate-negative-prompt" placeholder="不希望出现的元素"></textarea>
+        </div>
+
+        <div class="three-columns grid">
+            <div class="field">
+                <label for="ai-generate-count">生成数量</label>
+                <input id="ai-generate-count" type="number" min="1" max="6" value="4" />
+            </div>
+            <div class="field">
+                <label for="ai-generate-size">尺寸</label>
+                <input id="ai-generate-size" type="text" value="1024x1024" />
+            </div>
+            <div class="field">
+                <label for="ai-generate-quality">质量</label>
+                <input id="ai-generate-quality" type="text" value="standard" />
+            </div>
+        </div>
+
+        <div class="two-columns grid">
+            <div class="field">
+                <label for="ai-generate-style">风格</label>
+                <input id="ai-generate-style" type="text" value="vivid" />
+            </div>
+            <div class="field">
+                <label for="ai-generate-reference-image">参考图片（可选）</label>
+                <input id="ai-generate-reference-image" type="file" accept="image/*" />
+            </div>
+        </div>
+
+        <div class="actions block-top">
+            <button type="submit">开始生成</button>
+        </div>
+    </form>
+    <div id="ai-generate-message" class="block-top"></div>
+</section>
+
+<section class="card">
+    <div class="section-header inline-between">
+        <div>
+            <h2>生成结果</h2>
+            <p class="muted" id="ai-generated-summary">暂无生成结果。</p>
+        </div>
+        <div class="actions">
+            <button type="button" class="ghost" id="ai-select-all-button">全选</button>
+            <button type="button" class="ghost" id="ai-clear-selection-button">清空选择</button>
+        </div>
+    </div>
+
+    <div class="two-columns grid">
+        <div class="field">
+            <label for="ai-material-title-prefix">素材标题前缀</label>
+            <input id="ai-material-title-prefix" type="text" value="AI素材" />
+        </div>
+        <div class="field">
+            <label for="ai-material-keywords">关键词</label>
+            <input id="ai-material-keywords" type="text" placeholder="如：春季 海报" />
+        </div>
+    </div>
+
+    <div class="two-columns grid">
+        <div class="field">
+            <label for="ai-material-tags">标签</label>
+            <input id="ai-material-tags" type="text" value="AI" />
+        </div>
+        <div class="field">
+            <label for="ai-material-remark">备注</label>
+            <input id="ai-material-remark" type="text" placeholder="将写入素材备注/提示词" />
+        </div>
+    </div>
+
+    <div class="actions block-top">
+        <button type="button" id="ai-add-material-button">加入素材库并自动审核通过</button>
+    </div>
+    <div id="ai-material-message" class="block-top"></div>
+
+    <div class="material-list block-top ai-generated-grid" id="ai-generated-list">
+        <div class="empty">暂无生成图片，请先填写提示词后生成。</div>
     </div>
 </section>
 {% endblock %}

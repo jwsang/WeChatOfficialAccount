@@ -110,7 +110,33 @@ def test_article_generate_and_save_flow():
     assert after_detail.json()["used_count"] == before_used_count + 1
 
 
-def test_article_draft_box_management_flow():
+def test_article_draft_box_management_flow(monkeypatch):
+    monkeypatch.setattr("app.services.article_service.WechatApiClient.get_access_token", lambda self: "mock_access_token")
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.upload_article_image",
+        lambda self, access_token, image_path: f"https://mmbiz.qpic.cn/mock/{image_path.stem}",
+    )
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.upload_permanent_image",
+        lambda self, access_token, image_path: f"mock_media_{image_path.stem}",
+    )
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.add_draft",
+        lambda self, access_token, article: "mock_wechat_draft_media_id",
+    )
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.update_draft",
+        lambda self, access_token, media_id, article, index=0: None,
+    )
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.submit_publish",
+        lambda self, access_token, media_id: {"publish_id": "mock_publish_job_id"},
+    )
+    monkeypatch.setattr(
+        "app.services.article_service.WechatApiClient.get_publish_status",
+        lambda self, access_token, publish_id: {"publish_status": 0},
+    )
+
     materials = ensure_article_materials(seed=2)
     first, second, third = materials
 

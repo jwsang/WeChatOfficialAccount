@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import DATA_DIR
 from app.models.article_draft import ArticleDraft
 from app.models.material_image import MaterialImage
 from app.repositories.article_repository import ArticleRepository
@@ -20,6 +23,7 @@ from app.schemas.article import (
     WechatConfigUpdateRequest,
     WechatPublishActionRead,
 )
+from app.services.wechat_client import WechatApiClient
 
 
 class ArticleService:
@@ -188,11 +192,16 @@ class ArticleService:
         )
 
     def sync_draft_to_wechat(self, draft_id: int) -> WechatPublishActionRead:
-        draft, ordered_materials, material_reads, publish_payload = self._prepare_wechat_sync(draft_id)
-        uploaded_material_count = len(ordered_materials)
+        draft, ordered_materials, material_reads, publish_payload, article_payload = self._prepare_wechat_sync(draft_id)
+
+        publish_payload, uploaded_material_count, _, _ = self._perform_wechat_sync(
+            draft,
+            ordered_materials,
+            publish_payload,
+            article_payload,
+        )
 
         try:
-            draft.wx_draft_id = draft.wx_draft_id or self._generate_wechat_id("draft", draft.id, draft.article_title)
             if draft.draft_status in {"editing", "publish_failed"}:
                 draft.draft_status = "pending_publish"
             draft.publish_payload = json.dumps(publish_payload, ensure_ascii=False)
@@ -207,25 +216,39 @@ class ArticleService:
             action="sync",
             draft=self._serialize_draft(draft, material_reads, publish_payload),
             uploaded_material_count=uploaded_material_count,
-            message=f"草稿 {draft.id} 已同步到微信草稿箱。",
+            message=f"草稿 {draft.id} 已完成真实微信草稿同步。",
         )
 
     def publish_draft_to_wechat(self, draft_id: int) -> WechatPublishActionRead:
-        draft, ordered_materials, material_reads, publish_payload = self._prepare_wechat_sync(draft_id)
-        uploaded_material_count = len(ordered_materials)
+        draft, ordered_materials, material_reads, publish_payload, article_payload = self._prepare_wechat_sync(draft_id)
 
         try:
-            published_at = datetime.now(UTC)
-            draft.wx_draft_id = draft.wx_draft_id or self._generate_wechat_id("draft", draft.id, draft.article_title)
-            draft.wx_publish_id = self._generate_wechat_id("publish", draft.id, draft.article_title)
-            draft.draft_status = "published"
-            app_id, _ = self._get_wechat_credentials()
+            publish_payload, uploaded_material_count, client, access_token = self._perform_wechat_sync(
+                draft,
+                ordered_materials,
+                publish_payload,
+                article_payload,
+            )
+            publish_submit_result = client.submit_publish(access_token, draft.wx_draft_id or "")
+            wx_publish_id = str(publish_submit_result.get("publish_id") or "").strip()
+            publish_query_result: dict[str, Any] = {}
+            if wx_publish_id:
+                publish_query_result = client.get_publish_status(access_token, wx_publish_id)
+
+            publish_state_code = publish_query_result.get("publish_status") if publish_query_result else None
+            publish_status, draft_status, publish_message = self._map_wechat_publish_state(publish_state_code, draft.id)
+            draft.wx_publish_id = wx_publish_id or draft.wx_publish_id
+            draft.draft_status = draft_status
+            published_at = datetime.now(UTC) if draft_status == "published" else None
+
             publish_result = {
-                "publish_status": "success",
-                "published_at": published_at.isoformat(),
-                "publish_account": app_id[:8] if app_id else "",
+                "publish_status": publish_status,
+                "publish_status_code": publish_state_code,
+                "published_at": published_at.isoformat() if published_at else None,
                 "wx_draft_id": draft.wx_draft_id,
                 "wx_publish_id": draft.wx_publish_id,
+                "submit_result": publish_submit_result,
+                "query_result": publish_query_result,
                 "mode": "live",
             }
             publish_payload["wechat_publish_result"] = publish_result
@@ -234,24 +257,55 @@ class ArticleService:
             self.repository.create_publish_record(
                 {
                     "draft_id": draft.id,
-                    "publish_status": "success",
-                    "publish_message": f"草稿 {draft.id} 已完成微信公众号发布。",
+                    "publish_status": publish_status,
+                    "publish_message": publish_message,
                     "wx_result": json.dumps(publish_result, ensure_ascii=False),
                     "published_at": published_at,
                 }
             )
             self.repository.commit()
             self.repository.refresh(draft)
-        except Exception:
-            self.repository.rollback()
+        except HTTPException as exc:
+            self._persist_publish_failure(draft, publish_payload, str(exc.detail))
+            raise
+        except Exception as exc:
+            self._persist_publish_failure(draft, publish_payload, str(exc))
             raise
 
         return WechatPublishActionRead(
             action="publish",
             draft=self._serialize_draft(draft, material_reads, publish_payload),
             uploaded_material_count=uploaded_material_count,
-            message=f"草稿 {draft.id} 已完成微信公众号发布。",
+            message=publish_message,
         )
+
+    def _persist_publish_failure(self, draft: ArticleDraft, publish_payload: dict, reason: str) -> None:
+        try:
+            draft.draft_status = "publish_failed"
+            failed_result = {
+                "publish_status": "failed",
+                "reason": reason,
+                "wx_draft_id": draft.wx_draft_id,
+                "wx_publish_id": draft.wx_publish_id,
+                "mode": "live",
+                "failed_at": datetime.now(UTC).isoformat(),
+            }
+            publish_payload["wechat_publish_result"] = failed_result
+            draft.publish_payload = json.dumps(publish_payload, ensure_ascii=False)
+            self.repository.save_draft(draft)
+            self.repository.create_publish_record(
+                {
+                    "draft_id": draft.id,
+                    "publish_status": "failed",
+                    "publish_message": f"草稿 {draft.id} 发布失败：{reason}",
+                    "wx_result": json.dumps(failed_result, ensure_ascii=False),
+                    "published_at": None,
+                }
+            )
+            self.repository.commit()
+            self.repository.refresh(draft)
+        except Exception:
+            self.repository.rollback()
 
     def delete_draft(self, draft_id: int) -> None:
         draft = self._require_draft(draft_id)
@@ -277,7 +331,7 @@ class ArticleService:
     def _prepare_wechat_sync(
         self,
         draft_id: int,
-    ) -> tuple[ArticleDraft, list[tuple[int, MaterialImage, str]], list[ArticleMaterialRead], dict]:
+    ) -> tuple[ArticleDraft, list[tuple[int, MaterialImage, str]], list[ArticleMaterialRead], dict, dict[str, Any]]:
         self._ensure_wechat_ready()
         draft = self._require_draft(draft_id)
         if draft.draft_status == "deleted":
@@ -291,49 +345,184 @@ class ArticleService:
         if not isinstance(articles, list) or not articles:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="草稿缺少可同步的发布结构数据")
 
-        media_payload = self._build_wechat_media_payload(ordered_materials)
         article_payload = dict(articles[0])
+        if not str(article_payload.get("title") or "").strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="草稿标题为空，无法同步到微信")
+
+        return draft, ordered_materials, material_reads, publish_payload, article_payload
+
+    def _create_wechat_client(self) -> WechatApiClient:
+        app_id, app_secret = self._get_wechat_credentials()
+        return WechatApiClient(app_id=app_id, app_secret=app_secret)
+
+    def _perform_wechat_sync(
+        self,
+        draft: ArticleDraft,
+        ordered_materials: list[tuple[int, MaterialImage, str]],
+        publish_payload: dict,
+        article_payload: dict[str, Any],
+    ) -> tuple[dict, int, WechatApiClient, str]:
+        client = self._create_wechat_client()
+        access_token = client.get_access_token()
+
+        raw_cover_id = article_payload.get("cover_material_id") or draft.cover_material_id or ordered_materials[0][1].id
+        try:
+            cover_material_id = int(raw_cover_id)
+        except (TypeError, ValueError):
+            cover_material_id = ordered_materials[0][1].id
+
+        media_payload = self._upload_materials_to_wechat(
+            client,
+            access_token,
+            ordered_materials,
+            cover_material_id,
+            draft.content_html,
+        )
+        wechat_article = self._build_wechat_article_payload(
+            article_payload,
+            media_payload["wechat_content_html"],
+            media_payload["cover_media_id"],
+        )
+
+        if draft.wx_draft_id:
+            client.update_draft(access_token, draft.wx_draft_id, wechat_article)
+        else:
+            draft.wx_draft_id = client.add_draft(access_token, wechat_article)
+
         article_payload["thumb_media_material_id"] = media_payload["cover_media_id"]
         article_payload["wechat_article_materials"] = media_payload["items"]
-        app_id, _ = self._get_wechat_credentials()
         article_payload["wechat_sync_mode"] = "live"
+        article_payload["wechat_content_html"] = media_payload["wechat_content_html"]
         publish_payload["articles"] = [article_payload]
+        app_id, _ = self._get_wechat_credentials()
         publish_payload["wechat_sync"] = {
             "synced_at": datetime.now(UTC).isoformat(),
             "material_count": len(media_payload["items"]),
             "cover_media_id": media_payload["cover_media_id"],
             "app_id_tail": app_id[-6:] if app_id else "",
+            "wx_draft_id": draft.wx_draft_id,
             "mode": "live",
         }
-        return draft, ordered_materials, material_reads, publish_payload
+        return publish_payload, len(media_payload["items"]), client, access_token
 
-    def _build_wechat_media_payload(
+    def _upload_materials_to_wechat(
         self,
+        client: WechatApiClient,
+        access_token: str,
         ordered_materials: list[tuple[int, MaterialImage, str]],
-    ) -> dict:
-        items = []
-        cover_media_id = None
+        cover_material_id: int,
+        content_html: str,
+    ) -> dict[str, Any]:
+        upload_cache: dict[int, dict[str, str]] = {}
+        items: list[dict[str, Any]] = []
+        wechat_content_html = content_html
+        cover_media_id: str | None = None
+
         for sort_index, material, caption_text in ordered_materials:
-            media_id = self._generate_wechat_id("media", material.id, material.image_hash)
+            cached = upload_cache.get(material.id)
+            if not cached:
+                local_path = self._resolve_material_asset_path(material.local_file_path)
+                wx_image_url = client.upload_article_image(access_token, local_path)
+                wx_media_id = client.upload_permanent_image(access_token, local_path)
+                cached = {
+                    "wx_image_url": wx_image_url,
+                    "wx_media_id": wx_media_id,
+                }
+                upload_cache[material.id] = cached
+
+            wechat_content_html = self._replace_material_image_src(
+                wechat_content_html,
+                material.local_file_path,
+                cached["wx_image_url"],
+            )
+
             item = {
                 "material_id": material.id,
                 "sort_index": sort_index,
                 "caption_text": caption_text,
-                "wx_media_id": media_id,
+                "wx_media_id": cached["wx_media_id"],
+                "wx_image_url": cached["wx_image_url"],
                 "local_file_path": material.local_file_path,
                 "source_site_code": material.source_site_code,
             }
-            if cover_media_id is None:
-                cover_media_id = media_id
             items.append(item)
+            if material.id == cover_material_id and not cover_media_id:
+                cover_media_id = cached["wx_media_id"]
+
+        if not cover_media_id and items:
+            cover_media_id = str(items[0].get("wx_media_id") or "").strip()
+        if not cover_media_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="草稿缺少可用封面素材")
+
         return {
             "cover_media_id": cover_media_id,
             "items": items,
+            "wechat_content_html": wechat_content_html,
         }
 
-    def _generate_wechat_id(self, prefix: str, entity_id: int | None, raw_value: str) -> str:
-        digest = hashlib.sha1(f"{prefix}:{entity_id}:{raw_value}".encode("utf-8")).hexdigest()[:18]
-        return f"wx_{prefix}_{digest}"
+    def _resolve_material_asset_path(self, relative_path: str) -> Path:
+        normalized = (relative_path or "").strip().lstrip("/\\")
+        if not normalized:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="素材路径为空，无法上传到微信")
+
+        absolute_path = (DATA_DIR / normalized).resolve()
+        data_dir_resolved = DATA_DIR.resolve()
+        try:
+            absolute_path.relative_to(data_dir_resolved)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"素材路径非法：{relative_path}") from exc
+
+        if not absolute_path.exists() or not absolute_path.is_file():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"素材文件不存在：{relative_path}")
+        return absolute_path
+
+    def _replace_material_image_src(self, content_html: str, local_file_path: str, remote_url: str) -> str:
+        normalized = (local_file_path or "").strip().lstrip("/\\")
+        if not normalized:
+            return content_html
+        candidates = {
+            f"/data/{normalized}",
+            f"/data/{quote(normalized)}",
+        }
+        updated = content_html
+        for target in candidates:
+            updated = updated.replace(target, remote_url)
+        return updated
+
+    def _build_wechat_article_payload(
+        self,
+        article_payload: dict[str, Any],
+        wechat_content_html: str,
+        cover_media_id: str,
+    ) -> dict[str, Any]:
+        title = str(article_payload.get("title") or "").strip()
+        if not title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="草稿标题为空，无法发布到微信")
+        content = wechat_content_html.strip()
+        if not content:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="草稿正文为空，无法发布到微信")
+
+        return {
+            "title": title,
+            "author": str(article_payload.get("author") or "").strip(),
+            "digest": str(article_payload.get("digest") or "").strip(),
+            "content": content,
+            "content_source_url": str(article_payload.get("content_source_url") or "").strip(),
+            "thumb_media_id": cover_media_id,
+            "need_open_comment": 0,
+            "only_fans_can_comment": 0,
+        }
+
+    def _map_wechat_publish_state(self, publish_status_code: Any, draft_id: int) -> tuple[str, str, str]:
+        if publish_status_code in (0, "0"):
+            return "success", "published", f"草稿 {draft_id} 已在微信公众号发布成功。"
+        if publish_status_code in (1, "1", 2, "2", None):
+            return "publishing", "publishing", f"草稿 {draft_id} 已提交发布，微信平台处理中。"
+        return (
+            "failed",
+            "publish_failed",
+            f"草稿 {draft_id} 发布失败，微信状态码：{publish_status_code}",
+        )
 
     def _load_draft_materials(self, draft_id: int) -> tuple[list[tuple[int, MaterialImage, str]], list[ArticleMaterialRead]]:
         relations = self.repository.list_relations(draft_id)

@@ -68,3 +68,27 @@ class SiteTestResponse(BaseModel):
     preview_results: list[dict]
     message: str
     applied_rule_config: SiteRuleConfig
+
+
+class SiteAiPrefillRequest(BaseModel):
+    domain: str = Field(..., min_length=1, max_length=255)
+
+
+class SiteAiPrefillSuggestion(BaseModel):
+    name: str = ""
+    code: str = ""
+    domain: str = ""
+    enabled: bool = True
+    search_rule: str = ""
+    parse_rule: str = ""
+    page_rule: str = ""
+    remark: str = ""
+    crawl_method: str = "HTML解析"
+    rule_config: SiteRuleConfig = Field(default_factory=SiteRuleConfig)
+
+
+class SiteAiPrefillResponse(BaseModel):
+    domain: str
+    success: bool
+    message: str
+    suggestion: SiteAiPrefillSuggestion

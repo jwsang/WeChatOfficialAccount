@@ -18,7 +18,15 @@
             <input type="hidden" id="site-id" />
             <div class="field"><label for="name">站点名称</label><input id="name" required /></div>
             <div class="field"><label for="code">站点标识</label><input id="code" required /></div>
-            <div class="field"><label for="domain">站点域名</label><input id="domain" required /></div>
+            <div class="field">
+                <label for="domain">站点域名</label>
+                <div class="site-domain-actions">
+                    <input id="domain" required placeholder="例如 api.openverse.org" />
+                    <button type="button" class="secondary" id="site-ai-prefill-button">AI 自动填充</button>
+                </div>
+                <p class="muted">输入域名后可调用 AI 自动补全站点名称、标识与规则配置。</p>
+                <div id="site-ai-prefill-message"></div>
+            </div>
             <div class="field">
                 <label for="crawl_method">抓取方式说明</label>
                 <select id="crawl_method">

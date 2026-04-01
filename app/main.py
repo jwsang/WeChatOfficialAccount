@@ -19,6 +19,7 @@ from app.api.auth_routes import router as auth_router
 from app.api.crawl_routes import router as crawl_router
 from app.api.history_routes import router as history_router
 from app.api.material_routes import router as material_router
+from app.api.ai_assist_routes import router as ai_assist_router
 from app.api.site_routes import router as site_router
 from app.core.config import DATA_DIR, STATIC_DIR, TEMPLATE_DIR, settings
 from app.db.session import SessionLocal, engine
@@ -37,6 +38,7 @@ app.include_router(auth_router)
 app.include_router(site_router)
 app.include_router(crawl_router)
 app.include_router(material_router)
+app.include_router(ai_assist_router)
 app.include_router(article_router)
 app.include_router(article_legacy_router)
 app.include_router(history_router)

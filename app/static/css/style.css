@@ -327,6 +327,21 @@ button:disabled {
     max-width: 260px;
 }
 
+.site-domain-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.site-domain-actions .secondary {
+    white-space: nowrap;
+}
+
+#site-ai-prefill-message {
+    min-height: 20px;
+}
+
 .material-filter-inline-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1124,8 +1139,13 @@ body.modal-open {
     .compact-grid,
     .meta-grid,
     .material-filter-inline-row,
-    .wechat-config-inline-row {
+    .wechat-config-inline-row,
+    .site-domain-actions {
         grid-template-columns: 1fr;
+    }
+
+    .site-domain-actions .secondary {
+        width: 100%;
     }
 
     .inline-between,
