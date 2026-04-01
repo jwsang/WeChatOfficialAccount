@@ -1,6 +1,26 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+
+class HistoryItem(BaseModel):
+    id: int
+    item_type: Literal["article", "material", "crawl", "publish"]
+    title: str
+    description: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class HistoryFilter(BaseModel):
+    item_type: str = ""
+    date_from: str = ""
+    date_to: str = ""
+    keyword: str = ""
+    limit: int = 20
+    offset: int = 0
 
 
 class HistoryArticleSummaryRead(BaseModel):
@@ -70,12 +90,19 @@ class HistoryLogRead(BaseModel):
     related_id: int | None = None
 
 
+class HistoryModelSummaryRead(BaseModel):
+    total_models: int
+    provider_counts: dict[str, int]
+    default_model_name: str | None
+
+
 class HistoryOverviewRead(BaseModel):
     article_summary: HistoryArticleSummaryRead
     material_summary: HistoryMaterialSummaryRead
+    model_summary: HistoryModelSummaryRead
     crawl_history: list[HistoryCrawlRecordRead]
     material_site_stats: list[HistorySiteMaterialStatRead]
     material_hot_tags: list[HistoryTagHotRead]
     material_daily_tags: list[HistoryDailyTagStatRead]
     recent_publish_records: list[PublishRecordRead]
-    log_center: list[HistoryLogRead]
+    log_center: list[HistoryLogRead] = Field(default_factory=list)

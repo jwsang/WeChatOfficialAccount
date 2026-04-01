@@ -32,9 +32,21 @@ def update_ai_assist_config(
     return service.update_config(payload)
 
 
+@router.put("/config-with-model/{model_config_id}", response_model=AiAssistConfigRead)
+def update_ai_assist_config_with_model(
+    model_config_id: int,
+    service: AiAssistService = Depends(get_ai_assist_service),
+):
+    """
+    使用模型管理中的配置更新AI助手配置
+    """
+    return service.update_config_with_model(model_config_id)
+
+
 @router.post("/generate", response_model=AiAssistGenerateRead)
 async def generate_ai_images(
     prompt: str = Form(...),
+    model_id: int | None = Form(default=None),
     negative_prompt: str = Form(default=""),
     count: int = Form(default=4),
     size: str = Form(default="1024x1024"),
@@ -45,6 +57,7 @@ async def generate_ai_images(
 ):
     return await service.generate_images(
         prompt=prompt,
+        model_id=model_id,
         negative_prompt=negative_prompt,
         count=count,
         size=size,

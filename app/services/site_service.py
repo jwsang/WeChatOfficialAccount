@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import load_yaml_config, settings
 from app.repositories.article_repository import ArticleRepository
 from app.repositories.site_repository import SiteRepository
+from app.services.model_service import ModelConfigService
 from app.schemas.site import (
     SiteAiPrefillResponse,
     SiteAiPrefillSuggestion,
@@ -56,9 +57,9 @@ class SiteService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="站点不存在")
         self.repository.delete(site)
 
-    def ai_prefill_site(self, domain: str) -> SiteAiPrefillResponse:
+    def ai_prefill_site(self, domain: str, model_id: int | None = None) -> SiteAiPrefillResponse:
         normalized_domain = self._normalize_domain(domain)
-        suggestion = self._generate_site_prefill_by_ai(normalized_domain)
+        suggestion = self._generate_site_prefill_by_ai(normalized_domain, model_id)
         sanitized = self._sanitize_site_ai_suggestion(suggestion, normalized_domain)
         return SiteAiPrefillResponse(
             domain=normalized_domain,
@@ -104,11 +105,11 @@ class SiteService:
             applied_rule_config=rule_config,
         )
 
-    def _generate_site_prefill_by_ai(self, domain: str) -> SiteAiPrefillSuggestion | dict[str, Any]:
-        ai_config = self._resolve_ai_prefill_config()
+    def _generate_site_prefill_by_ai(self, domain: str, model_id: int | None = None) -> SiteAiPrefillSuggestion | dict[str, Any]:
+        ai_config = self._resolve_ai_prefill_config(model_id)
         api_key = str(ai_config.get("api_key") or "").strip()
         if not api_key:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先在 AI 辅助页面配置 API Key")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先在 AI 辅助页面配置 API Key 或在模型管理中添加有效的模型")
 
         payload = self._call_ai_site_prefill(
             base_url=str(ai_config.get("base_url") or "").strip(),
@@ -121,14 +122,36 @@ class SiteService:
             return payload["suggestion"]
         return payload
 
-    def _resolve_ai_prefill_config(self) -> dict[str, Any]:
+    def _resolve_ai_prefill_config(self, model_id: int | None = None) -> dict[str, Any]:
+        # 如果提供了 model_id，则直接使用模型管理中的配置
+        if model_id:
+            model_config = ModelConfigService.get_model_config_by_id(self.repository.db, model_id)
+            if model_config:
+                return {
+                    "base_url": model_config.api_base or ModelConfigService.get_default_api_base(model_config.provider),
+                    "model": model_config.model_identifier,
+                    "api_key": model_config.api_key,
+                    "timeout_seconds": 120,
+                }
+
+        # 否则尝试获取默认模型配置
+        default_model = ModelConfigService.get_default_model_config(self.repository.db)
+        if default_model:
+            return {
+                "base_url": default_model.api_base or ModelConfigService.get_default_api_base(default_model.provider),
+                "model": default_model.model_identifier,
+                "api_key": default_model.api_key,
+                "timeout_seconds": 120,
+            }
+
+        # 最后回退到旧有的配置逻辑
         yaml_config = load_yaml_config()
         openai_config = yaml_config.get("openAi") if isinstance(yaml_config, dict) else {}
         openai_config = openai_config if isinstance(openai_config, dict) else {}
 
         config: dict[str, Any] = {
             "base_url": str(openai_config.get("url") or "https://www.qiuner.top/v1").strip().rstrip("/"),
-            "model": str(openai_config.get("model") or "gpt-4o-mini").strip(),
+            "model": str(openai_config.get("model") or "gpt-5.2").strip(),
             "timeout_seconds": 120,
             "api_key": str(
                 openai_config.get("Key")

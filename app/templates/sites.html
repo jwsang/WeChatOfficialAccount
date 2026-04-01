@@ -22,9 +22,12 @@
                 <label for="domain">站点域名</label>
                 <div class="site-domain-actions">
                     <input id="domain" required placeholder="例如 api.openverse.org" />
+                    <select id="site-ai-model-select" class="compact-select">
+                        <option value="">-- 默认模型 --</option>
+                    </select>
                     <button type="button" class="secondary" id="site-ai-prefill-button">AI 自动填充</button>
                 </div>
-                <p class="muted">输入域名后可调用 AI 自动补全站点名称、标识与规则配置。</p>
+                <p class="muted">输入域名后可选择 AI 模型并点击按钮自动补全站点名称、标识与规则配置。</p>
                 <div id="site-ai-prefill-message"></div>
             </div>
             <div class="field">

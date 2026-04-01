@@ -49,4 +49,7 @@ def test_site(site_id: int, payload: SiteTestRequest, service: SiteService = Dep
 
 @router.post("/ai-prefill", response_model=SiteAiPrefillResponse)
 def ai_prefill_site(payload: SiteAiPrefillRequest, service: SiteService = Depends(get_site_service)):
-    return service.ai_prefill_site(payload.domain)
+    """
+    通过 AI 自动填充站点配置建议
+    """
+    return service.ai_prefill_site(payload.domain, payload.model_id)

@@ -13,13 +13,14 @@ if __name__ == "__main__" and __package__ is None:
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
+from app.api.ai_assist_routes import router as ai_assist_router
 from app.api.article_routes import legacy_router as article_legacy_router
 from app.api.article_routes import router as article_router
 from app.api.auth_routes import router as auth_router
 from app.api.crawl_routes import router as crawl_router
 from app.api.history_routes import router as history_router
 from app.api.material_routes import router as material_router
-from app.api.ai_assist_routes import router as ai_assist_router
+from app.api.model_config_routes import router as model_config_router
 from app.api.site_routes import router as site_router
 from app.core.config import DATA_DIR, STATIC_DIR, TEMPLATE_DIR, settings
 from app.db.session import SessionLocal, engine
@@ -39,6 +40,7 @@ app.include_router(site_router)
 app.include_router(crawl_router)
 app.include_router(material_router)
 app.include_router(ai_assist_router)
+app.include_router(model_config_router)
 app.include_router(article_router)
 app.include_router(article_legacy_router)
 app.include_router(history_router)
@@ -115,6 +117,12 @@ def history_page(request: Request):
 @app.get("/account", response_class=HTMLResponse)
 def account_page(request: Request):
     return render_page(request, "account.html", "account")
+
+
+@app.get("/model-configs/", response_class=HTMLResponse)
+@app.get("/model-configs", response_class=HTMLResponse)
+def model_configs_page(request: Request):
+    return render_page(request, "model_configs.html", "model_configs")
 
 
 if __name__ == "__main__":

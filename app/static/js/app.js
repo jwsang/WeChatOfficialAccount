@@ -28,6 +28,7 @@ const elements = {
     code: document.getElementById('code'),
     domain: document.getElementById('domain'),
     siteAiPrefillButton: document.getElementById('site-ai-prefill-button'),
+    siteAiModelSelect: document.getElementById('site-ai-model-select'),
     siteAiPrefillMessage: document.getElementById('site-ai-prefill-message'),
     crawlMethod: document.getElementById('crawl_method'),
     searchRule: document.getElementById('search_rule'),
@@ -137,6 +138,7 @@ const elements = {
     historyRefreshButton: document.getElementById('history-refresh-button'),
     historyArticleSummary: document.getElementById('history-article-summary'),
     historyMaterialSummary: document.getElementById('history-material-summary'),
+    historyModelSummary: document.getElementById('history-model-summary'),
     historyCrawlList: document.getElementById('history-crawl-list'),
     historyLogList: document.getElementById('history-log-list'),
     historySiteStats: document.getElementById('history-site-stats'),
@@ -168,6 +170,7 @@ const elements = {
     accountPasswordStrengthText: document.getElementById('account-password-strength-text'),
     accountPasswordRuleList: document.getElementById('account-password-rule-list'),
     aiConfigForm: document.getElementById('ai-config-form'),
+    aiConfigModelSelect: document.getElementById('ai-config-model-select'),
     aiConfigBaseUrl: document.getElementById('ai-config-base-url'),
     aiConfigModel: document.getElementById('ai-config-model'),
     aiConfigApiKey: document.getElementById('ai-config-api-key'),
@@ -633,6 +636,11 @@ function resetMaterialFilters() {
 }
 
 function applyAiConfigToForm(config = {}) {
+    // 重新获取下拉列表元素，防止 initialization 时的 timing 问题
+    const aiSelect = document.getElementById('ai-config-model-select');
+    if (aiSelect && config.model_id) {
+        aiSelect.value = config.model_id;
+    }
     if (elements.aiConfigBaseUrl) elements.aiConfigBaseUrl.value = config.base_url || '';
     if (elements.aiConfigModel) elements.aiConfigModel.value = config.model || '';
     if (elements.aiConfigDefaultSize) elements.aiConfigDefaultSize.value = config.default_size || '1024x1024';
@@ -713,9 +721,66 @@ async function loadAiAssistConfig(message = '正在加载 AI 配置...') {
     }
 }
 
+async function loadAiModelConfigs() {
+    try {
+        const models = await request('/api/model-configs');
+        if (!Array.isArray(models)) {
+            console.error('模型列表响应不是数组:', models);
+            return;
+        }
+
+        // 重新获取下拉列表元素，防止 initialization 时的 timing 问题
+        const aiSelect = document.getElementById('ai-config-model-select');
+        const siteSelect = document.getElementById('site-ai-model-select');
+        
+        const populateSelect = (selectElement, firstOptionText) => {
+            if (!selectElement) return;
+            const currentValue = selectElement.value;
+            selectElement.innerHTML = `<option value="">${firstOptionText}</option>`;
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = `${model.name} (${model.provider}) - ${model.model_identifier}`;
+                if (model.is_default) {
+                    option.textContent += ' [默认]';
+                }
+                selectElement.appendChild(option);
+            });
+            if (currentValue) selectElement.value = currentValue;
+        };
+
+        populateSelect(aiSelect, '-- 从模型管理中选择 --');
+        populateSelect(siteSelect, '-- 默认模型 --');
+    } catch (error) {
+        console.error('加载模型配置失败:', error);
+    }
+}
+
+async function handleAiModelSelection(event) {
+    const selectedValue = event.target.value;
+    if (!selectedValue) return; // 如果选择的是提示选项，则不执行任何操作
+    
+    try {
+        // 使用新的API端点来更新AI助手配置为选定的模型配置
+        const result = await request(`/api/ai-assist/config-with-model/${selectedValue}`, {
+            method: 'PUT'
+        });
+        
+        // 更新界面显示
+        state.aiAssistConfig = result;
+        applyAiConfigToForm(result);
+        
+        showMessage(elements.aiConfigMessage, '已切换到所选模型配置。', 'success');
+    } catch (error) {
+        showMessage(elements.aiConfigMessage, `切换模型配置失败: ${error.message}`, 'error');
+    }
+}
+
 async function submitAiAssistConfig(event) {
     event.preventDefault();
+    const aiSelect = document.getElementById('ai-config-model-select');
     const payload = {
+        model_id: aiSelect?.value ? parseInt(aiSelect.value) : null,
         base_url: elements.aiConfigBaseUrl?.value?.trim() || '',
         model: elements.aiConfigModel?.value?.trim() || '',
         default_size: elements.aiConfigDefaultSize?.value?.trim() || '1024x1024',
@@ -752,6 +817,13 @@ async function submitAiGenerate(event) {
 
     const formData = new FormData();
     formData.append('prompt', prompt);
+
+    // 获取当前选中的模型 ID
+    const aiSelect = document.getElementById('ai-config-model-select');
+    if (aiSelect && aiSelect.value) {
+        formData.append('model_id', aiSelect.value);
+    }
+
     formData.append('negative_prompt', elements.aiNegativePrompt?.value?.trim() || '');
     formData.append('count', String(Number(elements.aiGenerateCount?.value || 4)));
     formData.append('size', elements.aiGenerateSize?.value?.trim() || '1024x1024');
@@ -1223,6 +1295,10 @@ function renderHistoryOverview() {
             elements.historyMaterialSummary.className = 'empty';
             elements.historyMaterialSummary.textContent = '正在加载素材统计...';
         }
+        if (elements.historyModelSummary) {
+            elements.historyModelSummary.className = 'empty';
+            elements.historyModelSummary.textContent = '正在加载模型统计...';
+        }
         if (elements.historyCrawlList) {
             elements.historyCrawlList.className = 'empty';
             elements.historyCrawlList.textContent = '正在加载抓取历史...';
@@ -1282,6 +1358,30 @@ function renderHistoryOverview() {
                 <div><span class="muted">已使用素材</span><strong>${material.reused_materials || 0}</strong></div>
                 <div><span class="muted">累计复用次数</span><strong>${material.total_reuse_count || 0}</strong></div>
             </div>
+        `;
+    }
+
+    if (elements.historyModelSummary) {
+        const model = overview.model_summary || {};
+        const providerCounts = model.provider_counts || {};
+        const providerList = Object.entries(providerCounts)
+            .map(([provider, count]) => `${escapeHtml(provider)}: ${count}`)
+            .join(' ｜ ');
+
+        elements.historyModelSummary.className = 'history-panel';
+        elements.historyModelSummary.innerHTML = `
+            <div class="item-header compact-header">
+                <div>
+                    <h3>模型统计</h3>
+                    <div class="muted">模型提供商与配置概览</div>
+                </div>
+                <span class="status info">模型</span>
+            </div>
+            <div class="meta-grid compact-grid">
+                <div><span class="muted">模型总数</span><strong>${model.total_models || 0}</strong></div>
+                <div><span class="muted">默认模型</span><strong>${escapeHtml(model.default_model_name || '未设置')}</strong></div>
+            </div>
+            <div class="muted block-top">提供商分布：${providerList || '暂无数据'}</div>
         `;
     }
 
@@ -2987,6 +3087,7 @@ if (elements.accountNewPassword) {
 if (elements.aiConfigForm) {
     elements.aiConfigForm.addEventListener('submit', submitAiAssistConfig);
 }
+
 if (elements.aiGenerateForm) {
     elements.aiGenerateForm.addEventListener('submit', submitAiGenerate);
 }
@@ -3049,6 +3150,7 @@ async function initPage() {
     if (page === 'sites') {
         resetSiteForm();
         loadSites();
+        await loadAiModelConfigs();
         return;
     }
 
@@ -3062,7 +3164,14 @@ async function initPage() {
         state.aiGeneratedResults = [];
         state.aiSelectedTempIds = [];
         renderAiGeneratedResults();
-        loadAiAssistConfig();
+        await loadAiModelConfigs(); // 首先加载模型列表
+        loadAiAssistConfig(); // 然后加载配置（配置可能会选择其中的某个模型）
+
+        // 绑定模型选择变化事件
+        const aiSelect = document.getElementById('ai-config-model-select');
+        if (aiSelect) {
+            aiSelect.addEventListener('change', handleAiModelSelection);
+        }
         return;
     }
 

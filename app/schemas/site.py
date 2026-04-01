@@ -72,6 +72,7 @@ class SiteTestResponse(BaseModel):
 
 class SiteAiPrefillRequest(BaseModel):
     domain: str = Field(..., min_length=1, max_length=255)
+    model_id: int | None = None
 
 
 class SiteAiPrefillSuggestion(BaseModel):

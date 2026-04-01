@@ -11,6 +11,7 @@ from app.models.crawl_task import CrawlTask
 from app.models.crawl_task_log import CrawlTaskLog
 from app.models.material_image import MaterialImage
 from app.models.publish_record import PublishRecord
+from app.models.model_config import ModelConfig
 from app.repositories.history_repository import HistoryRepository
 from app.schemas.history import (
     HistoryArticleSummaryRead,
@@ -18,6 +19,7 @@ from app.schemas.history import (
     HistoryDailyTagStatRead,
     HistoryLogRead,
     HistoryMaterialSummaryRead,
+    HistoryModelSummaryRead,
     HistoryOverviewRead,
     HistorySiteMaterialStatRead,
     HistoryTagHotRead,
@@ -27,6 +29,7 @@ from app.schemas.history import (
 
 class HistoryService:
     def __init__(self, db: Session):
+        self.db = db
         self.repository = HistoryRepository(db)
 
     def get_overview(self) -> HistoryOverviewRead:
@@ -35,6 +38,7 @@ class HistoryService:
         crawl_tasks = self.repository.list_crawl_tasks(limit=20)
         crawl_logs = self.repository.list_crawl_logs(limit=20)
         publish_records = self.repository.list_publish_records(limit=20)
+        models = self.db.query(ModelConfig).all()
 
         draft_map = {draft.id: draft for draft in drafts}
         active_drafts = [draft for draft in drafts if draft.draft_status != "deleted"]
@@ -42,10 +46,12 @@ class HistoryService:
 
         article_summary = self._build_article_summary(active_drafts)
         material_summary = self._build_material_summary(active_materials)
+        model_summary = self._build_model_summary(models)
 
         return HistoryOverviewRead(
             article_summary=article_summary,
             material_summary=material_summary,
+            model_summary=model_summary,
             crawl_history=[self._serialize_crawl_task(task) for task in crawl_tasks],
             material_site_stats=self._build_site_material_stats(active_materials),
             material_hot_tags=self._build_hot_tags(active_materials),
@@ -54,6 +60,16 @@ class HistoryService:
                 self._serialize_publish_record(record, draft_map.get(record.draft_id)) for record in publish_records
             ],
             log_center=self._build_log_center(crawl_logs, publish_records, draft_map),
+        )
+
+    def _build_model_summary(self, models: list[ModelConfig]) -> HistoryModelSummaryRead:
+        total_models = len(models)
+        provider_counts = Counter(model.provider for model in models)
+        default_model = next((model for model in models if model.is_default), None)
+        return HistoryModelSummaryRead(
+            total_models=total_models,
+            provider_counts=dict(provider_counts),
+            default_model_name=default_model.name if default_model else None,
         )
 
     def _build_article_summary(self, drafts: list[ArticleDraft]) -> HistoryArticleSummaryRead:

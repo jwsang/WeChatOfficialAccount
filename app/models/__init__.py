@@ -5,6 +5,7 @@ from app.models.crawl_task import CrawlTask
 from app.models.crawl_task_log import CrawlTaskLog
 from app.models.draft_material_relation import DraftMaterialRelation
 from app.models.material_image import MaterialImage
+from app.models.model_config import ModelConfig
 from app.models.publish_record import PublishRecord
 from app.models.site_config import SiteConfig
 from app.models.user_account import UserAccount

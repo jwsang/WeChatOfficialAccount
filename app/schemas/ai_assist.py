@@ -8,6 +8,8 @@ from app.schemas.material import MaterialRead
 
 
 class AiAssistConfigRead(BaseModel):
+    model_id: int | None = None
+    provider: str = ""
     base_url: str
     model: str
     default_size: str = "1024x1024"
@@ -21,8 +23,9 @@ class AiAssistConfigRead(BaseModel):
 
 
 class AiAssistConfigUpdateRequest(BaseModel):
-    base_url: str = Field(..., min_length=1, max_length=255)
-    model: str = Field(..., min_length=1, max_length=120)
+    model_id: int | None = None
+    base_url: str = Field(default="", max_length=255)
+    model: str = Field(default="", max_length=120)
     default_size: str = Field(default="1024x1024", min_length=3, max_length=30)
     default_quality: str = Field(default="standard", min_length=1, max_length=30)
     default_style: str = Field(default="vivid", min_length=1, max_length=30)

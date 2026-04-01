@@ -4,6 +4,55 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class Article(BaseModel):
+    id: int
+    title: str
+    summary: str
+    author_name: str
+    source_url: str
+    content_html: str
+    template_code: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ArticleCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=500)
+    author_name: str = Field(default="", max_length=100)
+    source_url: str = Field(default="", max_length=500)
+    content_html: str = ""
+    template_code: str = "image_gallery"
+
+
+class ArticleUpdate(BaseModel):
+    title: str = Field(default="", min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=500)
+    author_name: str = Field(default="", max_length=100)
+    source_url: str = Field(default="", max_length=500)
+    content_html: str = ""
+    template_code: str = ""
+
+
+class ArticleInDB(BaseModel):
+    id: int
+    title: str
+    summary: str
+    author_name: str
+    source_url: str
+    content_html: str
+    template_code: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ArticleFilter(BaseModel):
+    keyword: str = ""
+    template_code: str = ""
+    limit: int = 20
+    offset: int = 0
+
+
 class ArticleMaterialInput(BaseModel):
     material_id: int
     caption_text: str = ""

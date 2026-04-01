@@ -13,8 +13,10 @@ import httpx
 from fastapi import HTTPException, UploadFile, status
 from PIL import Image
 from sqlalchemy.orm import Session
+from openai import AsyncOpenAI
 
 from app.core.config import DATA_DIR, load_yaml_config, settings
+from app.models.model_config import ModelConfig
 from app.repositories.article_repository import ArticleRepository
 from app.repositories.material_repository import MaterialRepository
 from app.schemas.ai_assist import (
@@ -25,6 +27,7 @@ from app.schemas.ai_assist import (
     AiAssistGenerateRead,
     AiAssistGeneratedImageRead,
 )
+from app.services.model_service import ModelConfigService
 
 
 AI_ASSIST_CONFIG_KEY = "ai_assist.config"
@@ -37,30 +40,81 @@ THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
 class AiAssistService:
     def __init__(self, db: Session):
+        self.db = db
         self.setting_repository = ArticleRepository(db)
         self.material_repository = MaterialRepository(db)
 
     def get_config(self) -> AiAssistConfigRead:
+        # 首先加载存储在 settings 中的 AI 助手基础配置
         config = self._load_config_dict()
-        api_key = str(config.get("api_key") or "").strip()
-        has_api_key = bool(api_key)
-        return AiAssistConfigRead(
-            base_url=str(config.get("base_url") or "").strip(),
-            model=str(config.get("model") or "").strip(),
-            default_size=str(config.get("default_size") or "1024x1024").strip() or "1024x1024",
-            default_quality=str(config.get("default_quality") or "standard").strip() or "standard",
-            default_style=str(config.get("default_style") or "vivid").strip() or "vivid",
-            default_count=int(config.get("default_count") or 4),
-            timeout_seconds=int(config.get("timeout_seconds") or 120),
-            default_negative_prompt=str(config.get("default_negative_prompt") or "").strip(),
-            has_api_key=has_api_key,
-            api_key_masked=self._mask_key(api_key),
-        )
+        
+        # 获取最终使用的模型配置
+        target_model = self._resolve_effective_model_config(config.get("model_id"))
+            
+        if target_model:
+            # 使用模型管理中的配置
+            return AiAssistConfigRead(
+                model_id=target_model.id,
+                base_url=target_model.api_base or ModelConfigService.get_default_api_base(target_model.provider),
+                model=target_model.model_identifier,
+                provider=target_model.provider,  # 添加提供商信息
+                default_size=str(config.get("default_size") or "1024x1024").strip() or "1024x1024",
+                default_quality=str(config.get("default_quality") or "standard").strip() or "standard",
+                default_style=str(config.get("default_style") or "vivid").strip() or "vivid",
+                default_count=int(config.get("default_count") or 4),
+                timeout_seconds=int(config.get("timeout_seconds") or 120),
+                default_negative_prompt=str(config.get("default_negative_prompt") or "").strip(),
+                has_api_key=True,
+                api_key_masked=self._mask_key(target_model.api_key),
+            )
+        else:
+            # 如果没有配置模型，则回退到旧的配置方式（为了兼容性）
+            api_key = str(config.get("api_key") or "").strip()
+            return AiAssistConfigRead(
+                model_id=None,
+                base_url=str(config.get("base_url") or "").strip(),
+                model=str(config.get("model") or "").strip(),
+                default_size=str(config.get("default_size") or "1024x1024").strip() or "1024x1024",
+                default_quality=str(config.get("default_quality") or "standard").strip() or "standard",
+                default_style=str(config.get("default_style") or "vivid").strip() or "vivid",
+                default_count=int(config.get("default_count") or 4),
+                timeout_seconds=int(config.get("timeout_seconds") or 120),
+                default_negative_prompt=str(config.get("default_negative_prompt") or "").strip(),
+                has_api_key=bool(api_key),
+                api_key_masked=self._mask_key(api_key),
+            )
+
+    def _resolve_effective_model_config(self, model_id: Any = None) -> ModelConfig | None:
+        """
+        统一解析最终使用的模型配置对象
+        """
+        # 如果指定了 model_id，优先使用
+        if model_id:
+            try:
+                target_model = ModelConfigService.get_model_config_by_id(self.db, int(model_id))
+                if target_model:
+                    return target_model
+            except (ValueError, TypeError):
+                pass
+        
+        # 否则尝试获取全局默认模型
+        return ModelConfigService.get_default_model_config(self.db)
 
     def update_config(self, payload: AiAssistConfigUpdateRequest) -> AiAssistConfigRead:
         config = self._load_config_dict()
-        config["base_url"] = payload.base_url.strip().rstrip("/")
-        config["model"] = payload.model.strip()
+        config["model_id"] = payload.model_id
+        
+        # 只有在没有选择 model_id 的情况下，才允许手动设置 base_url, model 和 api_key
+        if not payload.model_id:
+            if payload.base_url.strip():
+                config["base_url"] = payload.base_url.strip().rstrip("/")
+            if payload.model.strip():
+                config["model"] = payload.model.strip()
+            
+            next_api_key = payload.api_key.strip()
+            if next_api_key:
+                config["api_key"] = next_api_key
+        
         config["default_size"] = payload.default_size.strip()
         config["default_quality"] = payload.default_quality.strip()
         config["default_style"] = payload.default_style.strip()
@@ -68,11 +122,26 @@ class AiAssistService:
         config["timeout_seconds"] = payload.timeout_seconds
         config["default_negative_prompt"] = payload.default_negative_prompt.strip()
 
-        next_api_key = payload.api_key.strip()
-        if next_api_key:
-            config["api_key"] = next_api_key
-        elif not str(config.get("api_key") or "").strip():
-            config["api_key"] = ""
+        try:
+            self.setting_repository.upsert_setting_value(AI_ASSIST_CONFIG_KEY, json.dumps(config, ensure_ascii=False))
+            self.setting_repository.commit()
+        except Exception:
+            self.setting_repository.rollback()
+            raise
+        return self.get_config()
+
+    def update_config_with_model(self, model_config_id: int) -> AiAssistConfigRead:
+        """
+        使用模型管理中的配置更新AI助手配置
+        """
+        # 获取指定的模型配置
+        model_config = ModelConfigService.get_model_config_by_id(self.db, model_config_id)
+        if not model_config:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定的模型配置不存在")
+        
+        # 仅更新 model_id，不再复制 api_base, model, api_key 等字段，实现真正的动态关联
+        config = self._load_config_dict()
+        config["model_id"] = model_config.id
 
         try:
             self.setting_repository.upsert_setting_value(AI_ASSIST_CONFIG_KEY, json.dumps(config, ensure_ascii=False))
@@ -85,6 +154,7 @@ class AiAssistService:
     async def generate_images(
         self,
         *,
+        model_id: int | None = None,
         prompt: str,
         negative_prompt: str,
         count: int,
@@ -97,10 +167,31 @@ class AiAssistService:
         if not normalized_prompt:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请输入图片生成提示词")
 
+        # 统一解析配置：
+        # 1. 如果传入了 model_id，优先使用
+        # 2. 否则使用 AI 助手页面保存的 model_id
+        # 3. 最后回退到全局默认模型
         config = self._load_config_dict()
-        api_key = str(config.get("api_key") or "").strip()
-        if not api_key:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先在 AI 辅助页面配置 API Key")
+        effective_model_id = model_id or config.get("model_id")
+        target_model = self._resolve_effective_model_config(effective_model_id)
+        
+        if target_model:
+            # 使用模型管理中的配置
+            base_url = target_model.api_base or ModelConfigService.get_default_api_base(target_model.provider)
+            model = target_model.model_identifier
+            api_key = target_model.api_key
+            provider = target_model.provider
+            timeout_seconds = int(config.get("timeout_seconds") or 120)
+        else:
+            # 如果没有配置任何模型（包括全局默认），则回退到旧的独立配置方式
+            api_key = str(config.get("api_key") or "").strip()
+            if not api_key:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请先在 AI 辅助页面选择模型或配置 API Key")
+            
+            base_url = str(config.get("base_url") or "").strip() or "https://api.openai.com/v1"
+            model = str(config.get("model") or "").strip()
+            provider = "openai" # 默认假设是 OpenAI
+            timeout_seconds = int(config.get("timeout_seconds") or 120)
 
         reference_bytes: bytes | None = None
         if reference_image is not None:
@@ -109,16 +200,17 @@ class AiAssistService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="参考图文件不能为空")
 
         image_bytes_list = await self._call_image_api(
-            base_url=str(config.get("base_url") or "").strip(),
-            model=str(config.get("model") or "").strip(),
+            base_url=base_url,
+            model=model,
             api_key=api_key,
-            timeout_seconds=int(config.get("timeout_seconds") or 120),
+            provider=provider,
+            timeout_seconds=timeout_seconds,
             prompt=normalized_prompt,
             negative_prompt=negative_prompt.strip(),
             count=max(1, min(count, 6)),
-            size=size.strip() or str(config.get("default_size") or "1024x1024").strip(),
-            quality=quality.strip() or str(config.get("default_quality") or "standard").strip(),
-            style=style.strip() or str(config.get("default_style") or "vivid").strip(),
+            size=size.strip() or "1024x1024",  # 使用默认尺寸
+            quality=quality.strip() or "standard",  # 使用默认质量
+            style=style.strip() or "vivid",  # 使用默认风格
             reference_image_bytes=reference_bytes,
         )
 
@@ -239,6 +331,7 @@ class AiAssistService:
         base_url: str,
         model: str,
         api_key: str,
+        provider: str = "openai",
         timeout_seconds: int,
         prompt: str,
         negative_prompt: str,
@@ -248,9 +341,17 @@ class AiAssistService:
         style: str,
         reference_image_bytes: bytes | None,
     ) -> list[bytes]:
-        normalized_base_url = base_url.rstrip("/")
+        normalized_base_url = base_url.strip().rstrip("/")
         if not normalized_base_url:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI 接口地址不能为空")
+        
+        # 兼容性处理：如果用户提供了包含 /chat/completions 等后缀的 URL，自动剥离
+        suffixes_to_strip = ["/chat/completions", "/completions", "/chat", "/images/generations", "/images/edits"]
+        for suffix in suffixes_to_strip:
+            if normalized_base_url.endswith(suffix):
+                normalized_base_url = normalized_base_url[: -len(suffix)].rstrip("/")
+                break
+
         if not model.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="AI 模型不能为空")
 
@@ -258,84 +359,47 @@ class AiAssistService:
         if negative_prompt:
             final_prompt = f"{final_prompt}\n\n负向要求：{negative_prompt.strip()}"
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json",
-        }
-
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            if reference_image_bytes:
-                form_data = {
-                    "model": model,
-                    "prompt": final_prompt,
-                    "n": str(count),
-                    "size": size,
-                }
-                if quality:
-                    form_data["quality"] = quality
-                if style:
-                    form_data["style"] = style
-
-                response = await client.post(
-                    f"{normalized_base_url}/images/edits",
-                    data=form_data,
-                    files={"image": ("reference.png", reference_image_bytes, "image/png")},
-                    headers=headers,
-                )
-            else:
-                payload = {
-                    "model": model,
-                    "prompt": final_prompt,
-                    "n": count,
-                    "size": size,
-                }
-                if quality:
-                    payload["quality"] = quality
-                if style:
-                    payload["style"] = style
-
-                response = await client.post(
-                    f"{normalized_base_url}/images/generations",
-                    json=payload,
-                    headers=headers,
-                )
-
-            try:
-                body = response.json()
-            except ValueError as exc:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口返回非 JSON 数据") from exc
-
-            if not response.is_success:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"AI 接口调用失败（HTTP {response.status_code}）：{body}",
-                )
-
-            rows = body.get("data")
-            if not isinstance(rows, list) or not rows:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口返回结果为空")
-
-            output_images: list[bytes] = []
-            for item in rows[:count]:
-                if not isinstance(item, dict):
-                    continue
-                b64_json = item.get("b64_json")
-                image_url = item.get("url")
-                if isinstance(b64_json, str) and b64_json.strip():
-                    try:
-                        output_images.append(base64.b64decode(b64_json))
-                    except Exception:
-                        continue
-                    continue
-                if isinstance(image_url, str) and image_url.strip():
-                    image_response = await client.get(image_url.strip())
-                    if image_response.is_success and image_response.content:
-                        output_images.append(image_response.content)
-
-            if not output_images:
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口未返回可用图片数据")
-
-            return output_images
+        try:
+            async with AsyncOpenAI(api_key=api_key, base_url=normalized_base_url, timeout=timeout_seconds) as client:
+                if reference_image_bytes:
+                    response = await client.images.edit(
+                        model=model,
+                        prompt=final_prompt,
+                        n=count,
+                        size=size,
+                        image=("reference.png", reference_image_bytes),
+                        response_format="b64_json"
+                    )
+                else:
+                    kwargs = {
+                        "model": model,
+                        "prompt": final_prompt,
+                        "n": count,
+                        "size": size,
+                        "response_format": "b64_json"
+                    }
+                    if quality: kwargs["quality"] = quality
+                    if style: kwargs["style"] = style
+                    response = await client.images.generate(**kwargs)
+                
+                output_images = []
+                for item in response.data:
+                    if item.b64_json:
+                        output_images.append(base64.b64decode(item.b64_json))
+                    elif item.url:
+                        async with httpx.AsyncClient() as http_client:
+                            img_resp = await http_client.get(item.url)
+                            if img_resp.is_success:
+                                output_images.append(img_resp.content)
+                
+                if not output_images:
+                    raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI 接口未返回可用图片数据")
+                return output_images
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"AI 接口请求失败：{str(e)}"
+            )
 
     def _load_config_dict(self) -> dict[str, Any]:
         default_config = self._default_config_dict()

@@ -427,26 +427,27 @@ button:disabled {
 
 .site-item,
 .task-item,
-.preview-item,
-.log-item,
+.article-item,
 .material-item,
+.model-item,
 .history-item,
-.draft-item,
-.module-card,
+.publish-item,
 .selected-material-item {
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 14px;
-    background: #fff;
+    padding: 14px 16px;
+    transition: all 0.2s ease;
 }
 
 .site-item.active,
 .task-item.active,
 .material-item.active,
-.draft-item.active,
+.article-item.active,
+.model-item.active,
 .selected-material-item.cover-active {
-    border-color: #7ea8f8;
-    box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.12);
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.1);
 }
 
 .item-header {
