@@ -363,7 +363,7 @@ class AiAssistService:
         openai_config = openai_config if isinstance(openai_config, dict) else {}
 
         return {
-            "base_url": str(openai_config.get("url") or "https://api.openai.com/v1").strip().rstrip("/"),
+            "base_url": str(openai_config.get("url") or "https://www.qiuner.top/v1").strip().rstrip("/"),
             "model": str(openai_config.get("model") or "gpt-image-1").strip(),
             "default_size": "1024x1024",
             "default_quality": "standard",

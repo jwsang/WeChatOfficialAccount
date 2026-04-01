@@ -127,7 +127,7 @@ class SiteService:
         openai_config = openai_config if isinstance(openai_config, dict) else {}
 
         config: dict[str, Any] = {
-            "base_url": str(openai_config.get("url") or "https://api.openai.com/v1").strip().rstrip("/"),
+            "base_url": str(openai_config.get("url") or "https://www.qiuner.top/v1").strip().rstrip("/"),
             "model": str(openai_config.get("model") or "gpt-4o-mini").strip(),
             "timeout_seconds": 120,
             "api_key": str(
