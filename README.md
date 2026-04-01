@@ -570,8 +570,8 @@ pytest --cov=app --cov-report=html
 
 ## 📬 联系方式
 
-- 📧 Email: your.email@example.com
-- 💬 Issues: [GitHub Issues](https://github.com/yourusername/WeChatOfficialAccount/issues)
+- 📧 Email: jw_sang@126.com
+- 💬 Issues: [GitHub Issues](https://github.com/jwsang/WeChatOfficialAccount)
 - 📖 文档：本项目 Wiki
 
 ---

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block page_title %}模型管理{% endblock %}
+
+{% block page_body %}
+<section class="grid two-columns">
+    <section class="card">
+        <div class="section-header">
+            <div>
+                <h2 id="form-title">添加新模型</h2>
+                <p class="muted">配置并管理 AI 模型提供商与标识符，支持 OpenAI、Anthropic 及国内主流模型。</p>
+            </div>
+        </div>
+        <div id="form-message"></div>
+        <form id="model-form" class="form-grid">
+            <input type="hidden" id="model-id">
+            
+            <div class="field">
+                <label for="name">模型名称 *</label>
+                <input type="text" id="name" required placeholder="例如：GPT-4 Turbo, 阿里云百炼">
+            </div>
+            
+            <div class="field">
+                <label for="provider">模型提供商 *</label>
+                <select id="provider" required>
+                    <option value="">请选择模型提供商</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="aliyun">阿里云百炼</option>
+                    <option value="zhipu">智谱AI (ChatGLM)</option>
+                    <option value="baidu">百度 (文心一言)</option>
+                    <option value="tencent">腾讯 (混元)</option>
+                    <option value="moonshot">月之暗面 (Moonshot)</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="minimax">MiniMax</option>
+                    <option value="stepfun">阶跃星辰</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+            
+            <div class="field">
+                <label for="model_identifier">模型标识符 *</label>
+                <input type="text" id="model_identifier" required placeholder="例如：gpt-4-turbo">
+            </div>
+            
+            <div class="field">
+                <label for="api_key">API密钥 *</label>
+                <input type="password" id="api_key" required placeholder="请输入模型 API 密钥">
+            </div>
+            
+            <div class="field">
+                <label for="api_base">API 基础 URL</label>
+                <input type="url" id="api_base" placeholder="如果不填则使用默认 URL">
+            </div>
+            
+            <div class="field">
+                <label for="description">模型描述</label>
+                <textarea id="description" rows="2" placeholder="简要描述该模型的用途或特点"></textarea>
+            </div>
+            
+            <div class="field">
+                <label for="extra_config">额外配置 (JSON)</label>
+                <textarea id="extra_config" rows="3" class="json-textarea" placeholder='{"temperature": 0.7, "max_tokens": 1000}'></textarea>
+                <p class="muted">输入有效的 JSON 格式参数。</p>
+            </div>
+            
+            <div class="field inline-flex">
+                <input type="checkbox" id="is_default">
+                <label for="is_default" class="checkbox-label">设为默认模型</label>
+            </div>
+            
+            <div class="actions">
+                <button type="submit" id="submit-button">保存模型配置</button>
+                <button type="button" class="ghost" id="cancel-btn" style="display:none;">取消</button>
+                <button type="button" class="secondary" id="reset-button">清空表单</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card">
+        <div class="section-header inline-between">
+            <div>
+                <h2>已配置模型列表</h2>
+                <p class="muted">管理已保存的模型，支持编辑、删除及连接测试。</p>
+            </div>
+            <button class="secondary" id="refresh-button" type="button">刷新列表</button>
+        </div>
+        <div id="list-message"></div>
+        <div id="model-list" class="list-stack">
+            <!-- 模型列表将通过 JavaScript 动态加载 -->
+            <div class="empty">正在加载模型列表...</div>
+        </div>
+    </section>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='/js/pages/model_config.js') }}"></script>
+{% endblock %}
