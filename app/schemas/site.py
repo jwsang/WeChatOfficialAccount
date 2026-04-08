@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SiteRuleConfig(BaseModel):
+    # HTML 解析模式字段
     search_url_template: str = ""
     result_container_path: str = ""
     image_url_path: str = ""
@@ -17,6 +18,18 @@ class SiteRuleConfig(BaseModel):
     request_headers: dict[str, str] = Field(default_factory=dict)
     request_query_template: dict[str, str] = Field(default_factory=dict)
     extra_notes: str = ""
+    
+    # API 接口模式字段（兼容旧版配置）
+    api_key: str = ""
+    items_path: str = ""
+    title_field: str = ""
+    image_field: str = ""
+    page_field: str = ""
+    
+    # 通用爬虫字段（CSS 选择器）
+    item_selector: str = ""
+    image_selector: str = ""
+    link_selector: str = ""
 
 
 class SiteConfigBase(BaseModel):
