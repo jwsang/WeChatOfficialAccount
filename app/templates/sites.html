@@ -54,19 +54,47 @@
                     <h3>结构化规则配置</h3>
                     <p class="muted">用于后台配置站点抓取规则，保存后会自动同步生成旧版规则说明字段。</p>
                 </div>
-                <div class="rule-config-grid">
-                    <div class="field"><label for="rule-search-url-template">搜索模板</label><input id="rule-search-url-template" placeholder="例如 /api/search?q={keyword}&page={page}" /></div>
-                    <div class="field"><label for="rule-request-method">请求方法</label><select id="rule-request-method"><option value="GET">GET</option><option value="POST">POST</option></select></div>
-                    <div class="field"><label for="rule-result-container-path">结果容器路径</label><input id="rule-result-container-path" placeholder="例如 results.items" /></div>
-                    <div class="field"><label for="rule-image-url-path">图片字段路径</label><input id="rule-image-url-path" placeholder="例如 image.url" /></div>
-                    <div class="field"><label for="rule-source-page-url-path">来源页字段路径</label><input id="rule-source-page-url-path" placeholder="例如 detail.url" /></div>
-                    <div class="field"><label for="rule-title-path">标题字段路径</label><input id="rule-title-path" placeholder="例如 title" /></div>
-                    <div class="field"><label for="rule-pagination-param">页码参数名</label><input id="rule-pagination-param" value="page" /></div>
-                    <div class="field"><label for="rule-pagination-start">起始页</label><input id="rule-pagination-start" type="number" min="1" value="1" /></div>
-                    <div class="field"><label for="rule-pagination-size-param">每页参数名</label><input id="rule-pagination-size-param" value="limit" /></div>
-                    <div class="field"><label for="rule-request-headers">请求头 JSON</label><textarea id="rule-request-headers" class="json-textarea" placeholder='{"User-Agent":"Mozilla/5.0"}'></textarea></div>
-                    <div class="field"><label for="rule-request-query-template">固定查询参数 JSON</label><textarea id="rule-request-query-template" class="json-textarea" placeholder='{"lang":"zh"}'></textarea></div>
-                    <div class="field"><label for="rule-extra-notes">规则备注</label><textarea id="rule-extra-notes"></textarea></div>
+                
+                <!-- API 接口模式配置 -->
+                <div class="rule-config-section">
+                    <h4>API 接口配置（适用于 Unsplash/Pexels/Pixabay 等）</h4>
+                    <div class="rule-config-grid">
+                        <div class="field field-full"><label for="rule-api-key">API Key</label><input id="rule-api-key" placeholder="填写您的 API Key" /></div>
+                        <div class="field"><label for="rule-items-path">数据项路径</label><input id="rule-items-path" placeholder="例如 results, photos, hits" /></div>
+                        <div class="field"><label for="rule-title-field">标题字段</label><input id="rule-title-field" placeholder="例如 alt_description, alt, tags" /></div>
+                        <div class="field"><label for="rule-image-field">图片 URL 字段</label><input id="rule-image-field" placeholder="例如 urls.regular, src.large, largeImageURL" /></div>
+                        <div class="field"><label for="rule-page-field">页面 URL 字段</label><input id="rule-page-field" placeholder="例如 links.html, url, pageURL" /></div>
+                    </div>
+                </div>
+                
+                <!-- HTML 解析模式配置 -->
+                <div class="rule-config-section">
+                    <h4>HTML 解析配置（适用于普通网页）</h4>
+                    <div class="rule-config-grid">
+                        <div class="field"><label for="rule-search-url-template">搜索模板</label><input id="rule-search-url-template" placeholder="例如 /search?q={keyword}&page={page}" /></div>
+                        <div class="field"><label for="rule-request-method">请求方法</label><select id="rule-request-method"><option value="GET">GET</option><option value="POST">POST</option></select></div>
+                        <div class="field"><label for="rule-item-selector">条目选择器</label><input id="rule-item-selector" placeholder="例如 .photo-item, .gallery-item" /></div>
+                        <div class="field"><label for="rule-image-selector">图片选择器</label><input id="rule-image-selector" placeholder="例如 img.photo-thumb, img[src]" /></div>
+                        <div class="field"><label for="rule-link-selector">链接选择器</label><input id="rule-link-selector" placeholder="例如 a.photo-link, a[href]" /></div>
+                        <div class="field"><label for="rule-title-selector">标题选择器</label><input id="rule-title-selector" placeholder="例如 h3.photo-title, .title" /></div>
+                    </div>
+                </div>
+                
+                <!-- 通用高级配置 -->
+                <div class="rule-config-section">
+                    <h4>高级配置</h4>
+                    <div class="rule-config-grid">
+                        <div class="field"><label for="rule-result-container-path">结果容器路径</label><input id="rule-result-container-path" placeholder="例如 results.items" /></div>
+                        <div class="field"><label for="rule-image-url-path">图片字段路径</label><input id="rule-image-url-path" placeholder="例如 image.url" /></div>
+                        <div class="field"><label for="rule-source-page-url-path">来源页字段路径</label><input id="rule-source-page-url-path" placeholder="例如 detail.url" /></div>
+                        <div class="field"><label for="rule-title-path">标题字段路径</label><input id="rule-title-path" placeholder="例如 title" /></div>
+                        <div class="field"><label for="rule-pagination-param">页码参数名</label><input id="rule-pagination-param" value="page" /></div>
+                        <div class="field"><label for="rule-pagination-start">起始页</label><input id="rule-pagination-start" type="number" min="1" value="1" /></div>
+                        <div class="field"><label for="rule-pagination-size-param">每页参数名</label><input id="rule-pagination-size-param" value="limit" /></div>
+                        <div class="field"><label for="rule-request-headers">请求头 JSON</label><textarea id="rule-request-headers" class="json-textarea" placeholder='{"User-Agent":"Mozilla/5.0"}'></textarea></div>
+                        <div class="field"><label for="rule-request-query-template">固定查询参数 JSON</label><textarea id="rule-request-query-template" class="json-textarea" placeholder='{"lang":"zh"}'></textarea></div>
+                        <div class="field field-full"><label for="rule-extra-notes">规则备注</label><textarea id="rule-extra-notes"></textarea></div>
+                    </div>
                 </div>
             </section>
             <div class="actions">
