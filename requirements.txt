@@ -11,3 +11,5 @@ Pillow==11.3.0
 itsdangerous==2.2.0
 pytest==8.4.1
 openai==1.55.3
+beautifulsoup4>=4.12.0
+lxml>=5.0.0

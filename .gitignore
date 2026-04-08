@@ -1,42 +1,37 @@
-# Python cache & bytecode
-__pycache__/
-*.py[cod]
-*$py.class
+```
+# Database
+data/app.db
 
-# Virtual environment
+# Dependencies
 .venv/
 venv/
-env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Test & tooling cache
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Environment
+.env
+.env.local
+.env.*
+
+# Logs
+*.log
+
+# Coverage
 .coverage
-coverage.xml
 htmlcov/
+coverage/
 
-# IDE/editor
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
--=-0-=-=-0=-=
-# OS files
-.DS_Store
-Thumbs.db
+*.tmp
 
-# Runtime logs
-*.log
-
-# Local environment variables
-.env
-.env.*
-
-# Project runtime/generated data (do not commit)
-data/
-
-# SQLite and other local DB files
-*.db
-*.sqlite
-*.sqlite3
+# Build
+dist/
+build/
+target/
+```
