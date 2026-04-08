@@ -26,6 +26,7 @@ from app.schemas.crawl_task import (
     CrawlTaskRead,
     CrawlTaskRetryRequest,
 )
+from app.services.image_adapters import get_adapter
 
 
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -205,7 +206,47 @@ class CrawlService:
         self.repository.save_task(task)
 
     def _fetch_site_results(self, task: CrawlTask, site: SiteConfig) -> list[dict]:
-        """根据站点配置真实抓取页面数据"""
+        """根据站点配置真实抓取页面数据，使用适配器模式"""
+        results: list[dict] = []
+        
+        # 判断是否使用官方 API 适配器
+        api_adapters = ["unsplash", "pexels", "pixabay"]
+        
+        if site.code in api_adapters:
+            # 使用官方 API 适配器
+            api_key = site.rule_config.get("api_key", "")
+            if not api_key:
+                print(f"站点 {site.code} 未配置 API Key，将降级到模拟数据")
+                return self._simulate_site_results(task, site)
+            
+            try:
+                adapter = get_adapter(site.code, api_key=api_key)
+                results = adapter.search_images(keyword=task.keyword, per_page=task.per_site_limit)
+            except Exception as e:
+                print(f"站点 {site.code} API 调用失败：{e}, 将降级到模拟数据")
+                return self._simulate_site_results(task, site)
+        else:
+            # 使用通用爬虫或 HTML 解析
+            try:
+                # 尝试使用通用爬虫适配器
+                site_config_dict = {
+                    "code": site.code,
+                    "name": site.name,
+                    "domain": site.domain,
+                    "search_rule": site.search_rule,
+                    "rule_config": site.rule_config,
+                }
+                adapter = get_adapter("generic", site_config=site_config_dict)
+                results = adapter.search_images(keyword=task.keyword, per_page=task.per_site_limit)
+            except Exception as e:
+                print(f"站点 {site.code} 通用爬虫失败：{e}, 将尝试旧版解析方法")
+                # 降级到旧的_fetch_site_results 逻辑
+                results = self._fetch_site_results_legacy(task, site)
+        
+        return results[:task.per_site_limit]
+    
+    def _fetch_site_results_legacy(self, task: CrawlTask, site: SiteConfig) -> list[dict]:
+        """旧版抓取方法（向后兼容）"""
         results: list[dict] = []
         safe_keyword = quote_plus(task.keyword)
         
@@ -224,7 +265,7 @@ class CrawlService:
             
             # 如果有 API key 配置，添加到请求头
             api_key = site.rule_config.get("api_key", "")
-            if api_key:
+            if api_key and site.crawl_method == "API 接口":
                 headers["Authorization"] = f"Client-ID {api_key}"
             
             with httpx.Client(timeout=30.0, follow_redirects=True) as client:
@@ -251,7 +292,7 @@ class CrawlService:
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"解析失败：{e}")
         
-        return results[:task.per_site_limit]
+        return results
 
     def _parse_api_response(self, data: dict | list, site: SiteConfig, keyword: str) -> list[dict]:
         """解析 API 返回的 JSON 数据"""
