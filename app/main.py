@@ -22,6 +22,8 @@ from app.api.history_routes import router as history_router
 from app.api.material_routes import router as material_router
 from app.api.model_config_routes import router as model_config_router
 from app.api.site_routes import router as site_router
+from app.api.video_routes import router as video_router
+from app.api.wechat_routes import router as wechat_router
 from app.core.config import DATA_DIR, STATIC_DIR, TEMPLATE_DIR, settings
 from app.db.session import SessionLocal, engine
 from app.models import Base
@@ -44,6 +46,8 @@ app.include_router(model_config_router)
 app.include_router(article_router)
 app.include_router(article_legacy_router)
 app.include_router(history_router)
+app.include_router(video_router)
+app.include_router(wechat_router)
 
 with SessionLocal() as _db:
     UserService(_db).ensure_default_admin()

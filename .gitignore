@@ -1,42 +1,52 @@
-# Python cache & bytecode
-__pycache__/
-*.py[cod]
-*$py.class
+# Examples
 
-# Virtual environment
-.venv/
-venv/
-env/
+    Input:
+    ### Added files:
+    [src/main.py, README.md, config.json]
 
-# Test & tooling cache
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-coverage.xml
-htmlcov/
+    ### Deleted files:
+    [old/unused.py]
+    ### Modified files:
+    [utils.py]
+    ###current .gitignore Content
+    (empty)
+    Expected Output:
+    (empty — output nothing)
 
-# IDE/editor
-.vscode/
-.idea/
-*.swp
-*.swo
--=-0-=-=-0=-=
-# OS files
-.DS_Store
-Thumbs.db
+# Example 2 (Project with artifacts):
+Input:
+### Added files:
+[pycache/main.cpython-310.pyc, dist/app.js, .env.local, .vscode/settings.json
 
-# Runtime logs
+### Deleted files:
+    []
+
+### Modified files:
+[]
+### current .gitignore Content
 *.log
-
-# Local environment variables
-.env
-.env.*
-
-# Project runtime/generated data (do not commit)
-data/
-
-# SQLite and other local DB files
-*.db
-*.sqlite
-*.sqlite3
+Expected Output:
+    #Compiled and build artifacts
+    *.pyc
+    pycache/
+    *.o
+    *.obj
+    dist/
+    build/
+    #Dependencies
+    .venv/
+    venv/
+    node_modules/
+    #Logs and temp files
+    *.log
+    *.tmp
+    *.swp
+    #Environment
+    .env
+    .env.local
+    .env.
+    #Editors
+    .vscode/
+    .idea/
+    #Original rules preserved
+    *.log

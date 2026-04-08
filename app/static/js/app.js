@@ -36,8 +36,20 @@ const elements = {
     pageRule: document.getElementById('page_rule'),
     remark: document.getElementById('remark'),
     enabled: document.getElementById('enabled'),
+    // API 接口模式字段
+    ruleApiKey: document.getElementById('rule-api-key'),
+    ruleItemsPath: document.getElementById('rule-items-path'),
+    ruleTitleField: document.getElementById('rule-title-field'),
+    ruleImageField: document.getElementById('rule-image-field'),
+    rulePageField: document.getElementById('rule-page-field'),
+    // HTML 解析模式字段
     ruleSearchUrlTemplate: document.getElementById('rule-search-url-template'),
     ruleRequestMethod: document.getElementById('rule-request-method'),
+    ruleItemSelector: document.getElementById('rule-item-selector'),
+    ruleImageSelector: document.getElementById('rule-image-selector'),
+    ruleLinkSelector: document.getElementById('rule-link-selector'),
+    ruleTitleSelector: document.getElementById('rule-title-selector'),
+    // 高级配置字段
     ruleResultContainerPath: document.getElementById('rule-result-container-path'),
     ruleImageUrlPath: document.getElementById('rule-image-url-path'),
     ruleSourcePageUrlPath: document.getElementById('rule-source-page-url-path'),
@@ -529,7 +541,20 @@ function stringifyRuleJson(value) {
 
 function collectRuleConfig() {
     return {
+        // API 接口模式字段
+        api_key: elements.ruleApiKey.value.trim(),
+        items_path: elements.ruleItemsPath.value.trim(),
+        title_field: elements.ruleTitleField.value.trim(),
+        image_field: elements.ruleImageField.value.trim(),
+        page_field: elements.rulePageField.value.trim(),
+        // HTML 解析模式字段
         search_url_template: elements.ruleSearchUrlTemplate.value.trim(),
+        request_method: elements.ruleRequestMethod.value,
+        item_selector: elements.ruleItemSelector.value.trim(),
+        image_selector: elements.ruleImageSelector.value.trim(),
+        link_selector: elements.ruleLinkSelector.value.trim(),
+        title_selector: elements.ruleTitleSelector.value.trim(),
+        // 高级配置字段
         result_container_path: elements.ruleResultContainerPath.value.trim(),
         image_url_path: elements.ruleImageUrlPath.value.trim(),
         source_page_url_path: elements.ruleSourcePageUrlPath.value.trim(),
@@ -537,7 +562,6 @@ function collectRuleConfig() {
         pagination_param: elements.rulePaginationParam.value.trim() || 'page',
         pagination_start: Number(elements.rulePaginationStart.value || 1),
         pagination_size_param: elements.rulePaginationSizeParam.value.trim() || 'limit',
-        request_method: elements.ruleRequestMethod.value,
         request_headers: safeParseJson(elements.ruleRequestHeaders.value, {}),
         request_query_template: safeParseJson(elements.ruleRequestQueryTemplate.value, {}),
         extra_notes: elements.ruleExtraNotes.value.trim(),
@@ -545,18 +569,30 @@ function collectRuleConfig() {
 }
 
 function applyRuleConfigToForm(ruleConfig = {}) {
-    elements.ruleSearchUrlTemplate.value = ruleConfig.search_url_template || '';
-    elements.ruleRequestMethod.value = ruleConfig.request_method || 'GET';
-    elements.ruleResultContainerPath.value = ruleConfig.result_container_path || '';
-    elements.ruleImageUrlPath.value = ruleConfig.image_url_path || '';
-    elements.ruleSourcePageUrlPath.value = ruleConfig.source_page_url_path || '';
-    elements.ruleTitlePath.value = ruleConfig.title_path || '';
-    elements.rulePaginationParam.value = ruleConfig.pagination_param || 'page';
-    elements.rulePaginationStart.value = String(ruleConfig.pagination_start || 1);
-    elements.rulePaginationSizeParam.value = ruleConfig.pagination_size_param || 'limit';
-    elements.ruleRequestHeaders.value = stringifyRuleJson(ruleConfig.request_headers || {});
-    elements.ruleRequestQueryTemplate.value = stringifyRuleJson(ruleConfig.request_query_template || {});
-    elements.ruleExtraNotes.value = ruleConfig.extra_notes || '';
+    // API 接口模式字段
+    if (elements.ruleApiKey) elements.ruleApiKey.value = ruleConfig.api_key || '';
+    if (elements.ruleItemsPath) elements.ruleItemsPath.value = ruleConfig.items_path || '';
+    if (elements.ruleTitleField) elements.ruleTitleField.value = ruleConfig.title_field || '';
+    if (elements.ruleImageField) elements.ruleImageField.value = ruleConfig.image_field || '';
+    if (elements.rulePageField) elements.rulePageField.value = ruleConfig.page_field || '';
+    // HTML 解析模式字段
+    if (elements.ruleSearchUrlTemplate) elements.ruleSearchUrlTemplate.value = ruleConfig.search_url_template || '';
+    if (elements.ruleRequestMethod) elements.ruleRequestMethod.value = ruleConfig.request_method || 'GET';
+    if (elements.ruleItemSelector) elements.ruleItemSelector.value = ruleConfig.item_selector || '';
+    if (elements.ruleImageSelector) elements.ruleImageSelector.value = ruleConfig.image_selector || '';
+    if (elements.ruleLinkSelector) elements.ruleLinkSelector.value = ruleConfig.link_selector || '';
+    if (elements.ruleTitleSelector) elements.ruleTitleSelector.value = ruleConfig.title_selector || '';
+    // 高级配置字段
+    if (elements.ruleResultContainerPath) elements.ruleResultContainerPath.value = ruleConfig.result_container_path || '';
+    if (elements.ruleImageUrlPath) elements.ruleImageUrlPath.value = ruleConfig.image_url_path || '';
+    if (elements.ruleSourcePageUrlPath) elements.ruleSourcePageUrlPath.value = ruleConfig.source_page_url_path || '';
+    if (elements.ruleTitlePath) elements.ruleTitlePath.value = ruleConfig.title_path || '';
+    if (elements.rulePaginationParam) elements.rulePaginationParam.value = ruleConfig.pagination_param || 'page';
+    if (elements.rulePaginationStart) elements.rulePaginationStart.value = String(ruleConfig.pagination_start || 1);
+    if (elements.rulePaginationSizeParam) elements.rulePaginationSizeParam.value = ruleConfig.pagination_size_param || 'limit';
+    if (elements.ruleRequestHeaders) elements.ruleRequestHeaders.value = stringifyRuleJson(ruleConfig.request_headers || {});
+    if (elements.ruleRequestQueryTemplate) elements.ruleRequestQueryTemplate.value = stringifyRuleJson(ruleConfig.request_query_template || {});
+    if (elements.ruleExtraNotes) elements.ruleExtraNotes.value = ruleConfig.extra_notes || '';
 }
 
 function renderRuleConfigSummary(ruleConfig = {}) {

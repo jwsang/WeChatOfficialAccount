@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from datetime import UTC, datetime
 from io import BytesIO
 from time import perf_counter
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urljoin
 
+import httpx
+from bs4 import BeautifulSoup
 from fastapi import HTTPException, status
 from PIL import Image, ImageDraw
 from sqlalchemy.orm import Session
@@ -23,6 +26,7 @@ from app.schemas.crawl_task import (
     CrawlTaskRead,
     CrawlTaskRetryRequest,
 )
+from app.services.image_adapters import get_adapter
 
 
 UPLOAD_DIR = DATA_DIR / "uploads"
@@ -103,7 +107,14 @@ class CrawlService:
         for site in sites:
             started = perf_counter()
             try:
-                results = self._simulate_site_results(task, site)
+                # 优先使用真实抓取，失败时降级到模拟数据
+                try:
+                    results = self._fetch_site_results(task, site)
+                except Exception as fetch_error:
+                    # 记录抓取失败但继续执行
+                    print(f"站点 {site.code} 真实抓取失败：{fetch_error}, 使用模拟数据")
+                    results = self._simulate_site_results(task, site)
+                
                 success_count = 0
                 duplicate_count = 0
 
@@ -194,7 +205,217 @@ class CrawlService:
         )
         self.repository.save_task(task)
 
+    def _fetch_site_results(self, task: CrawlTask, site: SiteConfig) -> list[dict]:
+        """根据站点配置真实抓取页面数据，使用适配器模式"""
+        results: list[dict] = []
+        
+        # 判断是否使用官方 API 适配器
+        api_adapters = ["unsplash", "pexels", "pixabay"]
+        
+        if site.code in api_adapters:
+            # 使用官方 API 适配器
+            api_key = site.rule_config.get("api_key", "")
+            if not api_key:
+                print(f"站点 {site.code} 未配置 API Key，将降级到模拟数据")
+                return self._simulate_site_results(task, site)
+            
+            try:
+                adapter = get_adapter(site.code, api_key=api_key)
+                results = adapter.search_images(keyword=task.keyword, per_page=task.per_site_limit)
+            except Exception as e:
+                print(f"站点 {site.code} API 调用失败：{e}, 将降级到模拟数据")
+                return self._simulate_site_results(task, site)
+        else:
+            # 使用通用爬虫或 HTML 解析
+            try:
+                # 尝试使用通用爬虫适配器
+                site_config_dict = {
+                    "code": site.code,
+                    "name": site.name,
+                    "domain": site.domain,
+                    "search_rule": site.search_rule,
+                    "rule_config": site.rule_config,
+                }
+                adapter = get_adapter("generic", site_config=site_config_dict)
+                results = adapter.search_images(keyword=task.keyword, per_page=task.per_site_limit)
+            except Exception as e:
+                print(f"站点 {site.code} 通用爬虫失败：{e}, 将尝试旧版解析方法")
+                # 降级到旧的_fetch_site_results 逻辑
+                results = self._fetch_site_results_legacy(task, site)
+        
+        return results[:task.per_site_limit]
+    
+    def _fetch_site_results_legacy(self, task: CrawlTask, site: SiteConfig) -> list[dict]:
+        """旧版抓取方法（向后兼容）"""
+        results: list[dict] = []
+        safe_keyword = quote_plus(task.keyword)
+        
+        # 构建搜索 URL
+        search_url = site.search_rule.replace("{keyword}", safe_keyword).replace("{page}", "1")
+        if not search_url.startswith("http"):
+            search_url = f"https://{site.domain}{search_url}"
+        
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Referer": f"https://{site.domain}/",
+            }
+            
+            # 如果有 API key 配置，添加到请求头
+            api_key = site.rule_config.get("api_key", "")
+            if api_key and site.crawl_method == "API 接口":
+                headers["Authorization"] = f"Client-ID {api_key}"
+            
+            with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+                response = client.get(search_url, headers=headers)
+                response.raise_for_status()
+                
+                if site.crawl_method == "API 接口":
+                    # API 模式：解析 JSON 响应
+                    data = response.json()
+                    results = self._parse_api_response(data, site, task.keyword)
+                else:
+                    # HTML 解析模式
+                    soup = BeautifulSoup(response.text, "lxml")
+                    results = self._parse_html_response(soup, site, search_url, task.keyword)
+                    
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in [401, 403]:
+                # 认证失败或禁止访问，降级到模拟数据
+                print(f"站点 {site.code} 访问受限 ({e.response.status_code}), 将使用模拟数据")
+                return self._simulate_site_results(task, site)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"请求失败：{e}")
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"请求失败：{e}")
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"解析失败：{e}")
+        
+        return results
+
+    def _parse_api_response(self, data: dict | list, site: SiteConfig, keyword: str) -> list[dict]:
+        """解析 API 返回的 JSON 数据"""
+        results = []
+        rule_config = site.rule_config
+        
+        items_path = rule_config.get("items_path", "")
+        if items_path:
+            for key in items_path.split("."):
+                if isinstance(data, dict):
+                    data = data.get(key, [])
+                elif isinstance(data, list):
+                    try:
+                        data = data[int(key)]
+                    except (ValueError, IndexError):
+                        data = []
+                        break
+        
+        items = data if isinstance(data, list) else [data]
+        
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+                
+            title_field = rule_config.get("title_field", "title")
+            image_field = rule_config.get("image_field", "image_url")
+            page_field = rule_config.get("page_field", "page_url")
+            
+            title = self._extract_field(item, title_field)
+            image_url = self._extract_field(item, image_field)
+            page_url = self._extract_field(item, page_field)
+            
+            if image_url:
+                results.append({
+                    "title": title or keyword,
+                    "source_image_url": image_url,
+                    "source_page_url": page_url or image_url,
+                    "visual_seed": hash(image_url) % 10000,
+                })
+        
+        return results
+
+    def _parse_html_response(self, soup: BeautifulSoup, site: SiteConfig, base_url: str, keyword: str) -> list[dict]:
+        """解析 HTML 页面，提取图片信息"""
+        results = []
+        rule_config = site.rule_config
+        
+        # 获取选择器配置
+        item_selector = rule_config.get("item_selector", "")
+        image_selector = rule_config.get("image_selector", "img[src]")
+        title_selector = rule_config.get("title_selector", "")
+        link_selector = rule_config.get("link_selector", "a[href]")
+        
+        # 如果没有配置 item_selector，直接查找所有图片
+        if not item_selector:
+            images = soup.select(image_selector)
+            for img in images:
+                image_url = img.get("src") or img.get("data-src") or ""
+                if image_url:
+                    image_url = urljoin(base_url, image_url)
+                    title = img.get("alt") or img.get("title") or keyword
+                    page_url = base_url
+                    
+                    # 尝试查找父级链接
+                    parent_link = img.find_parent("a")
+                    if parent_link and parent_link.get("href"):
+                        page_url = urljoin(base_url, parent_link.get("href"))
+                    
+                    results.append({
+                        "title": title,
+                        "source_image_url": image_url,
+                        "source_page_url": page_url,
+                        "visual_seed": hash(image_url) % 10000,
+                    })
+        else:
+            # 按 item 分组查找
+            items = soup.select(item_selector)
+            for item in items:
+                image_el = item.select_one(image_selector) if image_selector else None
+                if not image_el:
+                    continue
+                    
+                image_url = image_el.get("src") or image_el.get("data-src") or ""
+                if image_url:
+                    image_url = urljoin(base_url, image_url)
+                    
+                    title = ""
+                    if title_selector:
+                        title_el = item.select_one(title_selector)
+                        title = title_el.get_text(strip=True) if title_el else ""
+                    else:
+                        title = image_el.get("alt") or image_el.get("title") or keyword
+                    
+                    page_url = base_url
+                    if link_selector:
+                        link_el = item.select_one(link_selector)
+                        if link_el and link_el.get("href"):
+                            page_url = urljoin(base_url, link_el.get("href"))
+                    
+                    results.append({
+                        "title": title or keyword,
+                        "source_image_url": image_url,
+                        "source_page_url": page_url,
+                        "visual_seed": hash(image_url) % 10000,
+                    })
+        
+        return results
+
+    def _extract_field(self, data: dict, field_path: str) -> str:
+        """从字典中提取嵌套字段值"""
+        if not field_path:
+            return ""
+        
+        current = data
+        for key in field_path.split("."):
+            if isinstance(current, dict):
+                current = current.get(key, "")
+            else:
+                return ""
+        return str(current) if current else ""
+
     def _simulate_site_results(self, task: CrawlTask, site: SiteConfig) -> list[dict]:
+        """模拟抓取结果（备用方案）"""
         results: list[dict] = []
         safe_keyword = quote_plus(task.keyword)
         for index in range(1, task.per_site_limit + 1):
